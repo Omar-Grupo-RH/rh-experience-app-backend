@@ -52,7 +52,7 @@ class ClientController
         header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
         header('Access-Control-Allow-Credentials: true');
         header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        header('Access-Control-Allow-Methods:POST');
         header('Allow: POST');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payload = self::readBody();

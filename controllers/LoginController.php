@@ -11,6 +11,11 @@ class LoginController
 {
     public static function login(): void
     {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:POST');
+        header('Allow: POST');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Allow: POST');
 
@@ -37,32 +42,12 @@ class LoginController
             }
 
             // Emitir token
-            $accessToken = JwtService::issueAccessToken((int)$user->id, [
-                'email' => $user->email,
-                'role'  => $user->admin ? 'admin' : 'user'
-            ]);
+            $accessToken = JwtService::issueAccessToken((int)$user->id);
 
             // Opción A: devolver solo JSON
             JsonResponse::send([
-                'success' => true,
-                'message' => 'Login correcto',
                 'token' => $accessToken,
-                'user' => [
-                    'id' => (int)$user->id,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
-                    'email' => $user->email,
-                ]
-            ]);
-
-            // Opción B (alternativa): además poner en cookie segura
-            // setcookie('access_token', $accessToken, [
-            //     'expires'=>time()+3600,
-            //     'path'=>'/',
-            //     'httponly'=>true,
-            //     'samesite'=>'Lax',
-            //     'secure'=>isset($_SERVER['HTTPS']),
-            // ]);
+            ], 200);
         }
     }
 
@@ -73,12 +58,11 @@ class LoginController
             header('Allow: POST');
             // Si quieres exigir que venga un token válido:
             // (no es estrictamente necesario en la versión básica)
-            
+
             $token = JwtService::getTokenFromRequest();
             if ($token) {
                 try {
                     $claims = JwtService::decode($token);
-                    
                 } catch (\Throwable $e) {
                 }
             }
