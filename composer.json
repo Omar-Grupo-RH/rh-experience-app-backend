@@ -1,0 +1,25 @@
+{
+  "name": "grupo-rh-dev/backend-experience",
+  "description": "Backend de la aplicacion de RH Experience",
+  "type": "project",
+  "autoload": {
+    "psr-4": {
+      "MVC\\": "./",
+      "Controllers\\": "./controllers",
+      "Model\\": "./models",
+      "Classes\\": "./classes",
+      "App\\": "core/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Omar-Grupo-RH",
+      "email": "omar.gruporh@gmail.com"
+    }
+  ],
+  "require": {
+    "phpmailer/phpmailer": "^6.9",
+    "vlucas/phpdotenv": "^5.6",
+    "firebase/php-jwt": "^6.11"
+  }
+}
