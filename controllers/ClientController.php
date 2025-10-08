@@ -95,10 +95,7 @@ class ClientController
                 'data' => [
                     'id'         => $result['id'] ?? null,
                     'first_name' => $client->first_name,
-                    'last_name'  => $client->last_name,
                     'email'      => $client->email,
-                    'phone'      => $client->phone,
-                    'created_at' => $client->created_at,
                 ]
             ], 201);
         }

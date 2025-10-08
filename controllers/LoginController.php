@@ -40,13 +40,20 @@ class LoginController
             if (!password_verify($password, $user->password)) {
                 JsonResponse::send(['success' => false, 'message' => 'Contraseña incorrecta'], 401);
             }
-
+            
             // Emitir token
-            $accessToken = JwtService::issueAccessToken((int)$user->id);
+            $accessToken = JwtService::issueAccessToken((int)$user->id, [
+                'admin' => $user->admin
+            ]);
 
             // Opción A: devolver solo JSON
             JsonResponse::send([
                 'token' => $accessToken,
+                'first_name'  => $user->first_name,   // ajusta a tu columna real
+                'last_name'  => $user->last_name,   // ajusta a tu columna real
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'admin' => $user->admin
             ], 200);
         }
     }
