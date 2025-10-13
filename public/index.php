@@ -22,6 +22,7 @@ require_once __DIR__ . '/../includes/app.php';
 
 use Controllers\ClientController;
 use Controllers\LoginController;
+use Controllers\TripController;
 use MVC\Router;
 
 
@@ -34,11 +35,12 @@ $router->post('/api/logout', [LoginController::class, 'logout']);
 $router->post('/api/client/create', [ClientController::class, 'store']);
 
 
-//Listar Clientes admin
+//Admin
 $router->get('/api/clients', [ClientController::class, 'all']);
 $router->get('/api/client', [ClientController::class, 'show']);
 $router->post('/api/client/destroy', [ClientController::class, 'destroy']);
 $router->post('/api/client/update', [ClientController::class, 'update']);
+$router->post('/api/trip/create', [TripController::class, 'store']);
 
 
 

@@ -21,7 +21,7 @@ final class ClientValidator
     public  static function isAdult(Client $c): bool
     {
         if (!$c->born_date) {
-            return false; // Si no hay fecha de nacimiento, no se puede determinar si es mayor de edad
+            return false; 
         }
 
         $bornDate = new \DateTime($c->born_date);
