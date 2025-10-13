@@ -45,6 +45,66 @@ class ClientController
     }
 
     /* =======================
+       GET /api/clients  (mostrar)
+       ======================= */
+    public static function all(): void
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:GET');
+        header('Allow: GET');
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+
+            $clients  = Client::whereAll('admin', 0);
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Cliente creado correctamente',
+                'data' => $clients
+            ], 201);
+        }
+    }
+
+    /* =======================
+       GET /api/clients/id  (mostrar un cliente)
+       ======================= */
+
+    public static function show(): void
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+        header('Access-Control-Allow-Methods: GET, OPTIONS');
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(204);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+            JsonResponse::send(['success' => false, 'message' => 'Method Not Allowed'], 405);
+        }
+
+        $id = $_GET['id'] ?? null; // si usas query param
+        if (!$id) {
+            JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
+        }
+
+        $client = Client::where('id', $id);
+        if (!$client) {
+            JsonResponse::send(['success' => false, 'message' => 'Cliente no encontrado'], 404);
+        }
+        // Si es objeto:
+        unset($client->password, $client->created_at, $client->updated_at, $client->admin);
+
+        JsonResponse::send([
+            'success' => true,
+            'message' => 'Cliente encontrado',
+            'data' => $client,
+        ], 200); // ✅ 200 en GET
+    }
+
+    /* =======================
        POST /api/clients  (crear)
        ======================= */
     public static function store(): void
@@ -95,7 +155,10 @@ class ClientController
                 'data' => [
                     'id'         => $result['id'] ?? null,
                     'first_name' => $client->first_name,
+                    'last_name' => $client->first_name,
                     'email'      => $client->email,
+                    'phone'      => $client->phone,
+                    'created_at' => $client->created_at,
                 ]
             ], 201);
         }
@@ -107,76 +170,98 @@ class ClientController
        ========================================== */
     public static function update(): void
     {
+        header('Access-Control-Allow-Origin: http://localhost:3000');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+        header('Access-Control-Allow-Methods: POST, OPTIONS');
+        header('Content-Type: application/json; charset=utf-8');
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            // ID desde el JWT (el usuario solo puede editarse a sí mismo)
-            $authUserId = JwtService::requireUserId();
-            //$authUserId = 4;
-
-            // Cargar registro
-            try {
-                $current = Client::find($authUserId);
-            } catch (Throwable $e) {
-                JsonResponse::send(['success' => false, 'message' => 'Error al buscar el cliente'], 500);
-            }
-            if (!$current) {
-                JsonResponse::send(['success' => false, 'message' => 'Cliente no encontrado'], 404);
-            }
-
-            // Body y campos permitidos
-            $payload = self::readBody();
-            $data    = self::pick($payload, ['first_name', 'last_name', 'email', 'phone']);
-            if (empty($data)) {
-                JsonResponse::send(['success' => false, 'message' => 'No hay campos válidos para actualizar'], 400);
-            }
-
-            // Aplicar cambios + validar
-            $current->sincronizar($data);
-            $errors = ClientValidator::validateUpdate($current);
-            if ($errors) {
-                JsonResponse::send(['success' => false, 'errors' => $errors], 422);
-            }
-
-            // Unicidad de email (excluyendo mi propio id)
-            try {
-                $existe = Client::where('email', $current->email);
-                if ($existe && (int)$existe->id !== (int)$current->id) {
-                    JsonResponse::send(['success' => false, 'errors' => ['El correo ya está en uso por otro usuario']], 422);
-                }
-            } catch (Throwable $e) {
-                JsonResponse::send(['success' => false, 'message' => 'Error de base de datos (unicidad email)'], 500);
-            }
-
-            // Timestamp y guardar
-            $current->updated_at = Clock::today(); // o Clock::nowMs()
-            try {
-                $result = $current->guardar();
-            } catch (Throwable $e) {
-                JsonResponse::send(['success' => false, 'message' => 'Error al actualizar'], 500);
-            }
-
-            if (empty($result['resultado'])) {
-                JsonResponse::send(['success' => false, 'message' => 'No se pudo actualizar', 'debug' => $result['error'] ?? null], 500);
-            }
-
-            // Forzar reautenticación (cerrar sesión / borrar cookies JWT)
-            LogoutService::run();
-
-            JsonResponse::send([
-                'success'     => true,
-                'message'     => 'Cliente actualizado. Debe iniciar sesión nuevamente.',
-                'must_reauth' => true,
-                'data'        => [
-                    'id'         => (int)$current->id,
-                    'first_name' => $current->first_name,
-                    'last_name'  => $current->last_name,
-                    'email'      => $current->email,
-                    'phone'      => $current->phone,
-                    'updated_at' => $current->updated_at,
-                ]
-            ], 200);
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(204);
+            exit;
         }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send(['success' => false, 'message' => 'Method Not Allowed'], 405);
+        }
+
+        $payload = self::readBody();
+        $id = $payload['id'] ?? null;
+        if (!$id) {
+            JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
+        }
+
+        $client = Client::find($id);
+        if (!$client) {
+            JsonResponse::send(['success' => false, 'message' => 'Cliente no encontrado'], 404);
+        }
+
+        // unicidad de email (sólo si viene y cambió)
+        if (!empty($payload['email']) && $payload['email'] !== $client->email) {
+            $emailExist = Client::where('email', $payload['email']);
+            if ($emailExist && (int)$emailExist->id !== (int)$client->id) {
+                JsonResponse::send(['success' => false, 'errors' => ['El correo ya está en uso.']], 422);
+            }
+        }
+
+        // asignaciones (sólo si vienen)
+        foreach (['first_name', 'last_name', 'email', 'phone', 'born_date'] as $k) {
+            if (array_key_exists($k, $payload)) {
+                $client->$k = trim((string)$payload[$k]);
+            }
+        }
+
+        // password opcional + hash
+        if (!empty($payload['password'])) {
+            $client->password = password_hash($payload['password'], PASSWORD_BCRYPT);
+        }
+
+        // allergies: acepta array o string JSON; guarda como string JSON
+        if (array_key_exists('allergies', $payload)) {
+            $all = $payload['allergies'];
+            $client->allergies = is_array($all)
+                ? json_encode($all, JSON_UNESCAPED_UNICODE)
+                : (string)$all;
+        }
+
+        $client->updated_at = Clock::today();
+
+        // validación de edición
+        $errors = ClientValidator::validateUpdate($client);
+        if ($errors) {
+            JsonResponse::send(['success' => false, 'errors' => $errors], 422);
+        }
+
+        try {
+            $result = $client->guardar();
+        } catch (Throwable $e) {
+            JsonResponse::send(['success' => false, 'message' => 'Error al actualizar el cliente'], 500);
+        }
+
+        if (empty($result['resultado'])) {
+            JsonResponse::send(['success' => false, 'message' => 'No se pudo actualizar el cliente'], 500); // 👈 mensaje corregido
+        }
+
+        // respuesta sanitizada (sin password/admin/created_at/updated_at) y allergies como array
+        $all = $client->allergies ?? '[]';
+        if (is_string($all)) {
+            $all = json_decode($all, true) ?: [];
+        }
+
+        JsonResponse::send([
+            'success' => true,
+            'message' => 'Cliente actualizado',
+            'data' => [
+                'id'         => (int)$client->id,
+                'first_name' => $client->first_name,
+                'last_name'  => $client->last_name,
+                'email'      => $client->email,
+                'phone'      => $client->phone,
+                'born_date'  => $client->born_date,
+                'allergies'  => $all, // 👈 array
+            ],
+        ], 200);
     }
+
 
     /* ==================================
        DELETE /api/clients/me  (auto-borrado)
@@ -184,21 +269,29 @@ class ClientController
        ================================== */
     public static function destroy(): void
     {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:POST');
+        header('Allow: POST');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
+            // Leer body JSON o FormData
+            $payload = self::readBody();
+            $id = $payload['id'] ?? null;
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'DELETE') {
-            header('Allow: DELETE, POST');
-            // Usuario autenticado desde JWT
-            $authUserId = JwtService::requireUserId();
-            //$authUserId = '4';
 
-            // Buscar y eliminar
+            if (!$id) {
+                JsonResponse::send(['success' => false, 'message' => 'Falta id del cliente'], 400);
+            }
+
             try {
-                $client = Client::find($authUserId);
+                $client = Client::find($id);
             } catch (Throwable $e) {
                 JsonResponse::send(['success' => false, 'message' => 'Error al buscar usuario'], 500);
             }
+
             if (!$client) {
                 JsonResponse::send(['success' => false, 'message' => 'Usuario no encontrado'], 404);
             }
@@ -208,16 +301,14 @@ class ClientController
             } catch (Throwable $e) {
                 JsonResponse::send(['success' => false, 'message' => 'Error al eliminar la cuenta'], 500);
             }
+
             if (!$ok) {
                 JsonResponse::send(['success' => false, 'message' => 'No se pudo eliminar la cuenta'], 500);
             }
 
-            // Forzar logout
-            LogoutService::run();
-
             JsonResponse::send([
                 'success' => true,
-                'message' => 'Cuenta eliminada correctamente. Debe iniciar sesión si desea continuar.',
+                'message' => 'Cuenta eliminada correctamente.',
                 'must_reauth' => true
             ], 200);
         } else {

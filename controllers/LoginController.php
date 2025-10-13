@@ -84,7 +84,6 @@ class LoginController
                 'must_reauth' => true
             ]);
         } else {
-
             JsonResponse::send(['success' => false, 'message' => 'Método no permitido'], 405);
         }
     }

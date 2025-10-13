@@ -18,6 +18,19 @@ final class ClientValidator
         return array_merge($e, self::formats($c));
     }
 
+    public  static function isAdult(Client $c): bool
+    {
+        if (!$c->born_date) {
+            return false; // Si no hay fecha de nacimiento, no se puede determinar si es mayor de edad
+        }
+
+        $bornDate = new \DateTime($c->born_date);
+        $today = new \DateTime();
+        $age = $today->diff($bornDate)->y;
+
+        return $age >= 18;
+    }
+
     private static function required(Client $c, bool $withPassword): array
     {
         $e = [];
@@ -25,8 +38,14 @@ final class ClientValidator
         if ($c->last_name  === '') $e[] = 'El apellido es obligatorio';
         if ($c->email      === '') $e[] = 'El email es obligatorio';
         if ($c->phone      === '') $e[] = 'El teléfono es obligatorio';
+
         if ($withPassword && ($c->password === '' || $c->password === null)) {
             $e[] = 'La contraseña es obligatoria';
+        }
+        if ($c->born_date === '' || $c->born_date === null) {
+            $e[] = 'La fecha de nacimiento es obligatoria';
+        } elseif (!self::isAdult($c)) {
+            $e[] = 'El cliente debe ser mayor de edad';
         }
         return $e;
     }
