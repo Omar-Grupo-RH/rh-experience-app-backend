@@ -43,6 +43,7 @@ $router->post('/api/client/update', [ClientController::class, 'update']);
 $router->get('/api/trip', [TripController::class, 'show']);
 $router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/trip/create', [TripController::class, 'store']);
+$router->post('/api/trip/destroy', [TripController::class, 'destroy']);
 
 
 

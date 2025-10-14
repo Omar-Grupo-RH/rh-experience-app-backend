@@ -116,4 +116,54 @@ class TripController
             ], 201);
         }
     }
+
+
+
+    public static function destroy(): void
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000');
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+        header('Access-Control-Allow-Methods: POST, OPTIONS');
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(204);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send(['success' => false, 'message' => 'Method Not Allowed'], 405);
+        }
+
+        $payload = self::readBody();              
+        $id = $payload['id'] ?? null;             
+        if (!$id) {
+            JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
+        }
+
+        try {
+            $trip = Trip::find($id);
+        } catch (\Throwable $e) {
+            JsonResponse::send(['success' => false, 'message' => 'Error al buscar el evento'], 500);
+        }
+
+        if (!$trip) {
+            JsonResponse::send(['success' => false, 'message' => 'Evento no encontrado'], 404);
+        }
+
+        try {
+            $ok = $trip->eliminar();               // 👈 tu método de modelo que hace DELETE
+        } catch (\Throwable $e) {
+            JsonResponse::send(['success' => false, 'message' => 'Error al eliminar el evento'], 500);
+        }
+
+        if (!$ok) {
+            JsonResponse::send(['success' => false, 'message' => 'No se pudo eliminar el evento'], 500);
+        }
+
+        JsonResponse::send([
+            'success' => true,
+            'message' => 'RH EXPERIENCE eliminado correctamente',
+        ], 200); // 👈 200, no 201
+    }
 }
