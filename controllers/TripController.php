@@ -27,6 +27,49 @@ class TripController
         return $payload;
     }
 
+    public static function index()
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:GET');
+        header('Allow: GET');
+
+        $trips = Trip::all();
+
+        JsonResponse::send([
+            'success' => true,
+            'data' => $trips
+        ], 201);
+    }
+
+
+    public static function show()
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:GET');
+        header('Allow: GET');
+
+
+
+        $id = $_GET['id'] ?? null; // si usas query param
+        if (!$id) {
+            JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
+        }
+
+        $trip = Trip::where('id', $id);
+        if (!$trip) {
+            JsonResponse::send(['success' => false, 'message' => 'Evento no encontrado'], 404);
+        }
+
+        JsonResponse::send([
+            'success' => true,
+            'message' => 'Cliente encontrado',
+            'data' => $trip,
+        ], 200); // ✅ 200 en GET
+    }
 
     public static function store()
     {

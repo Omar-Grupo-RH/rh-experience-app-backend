@@ -40,6 +40,8 @@ $router->get('/api/clients', [ClientController::class, 'all']);
 $router->get('/api/client', [ClientController::class, 'show']);
 $router->post('/api/client/destroy', [ClientController::class, 'destroy']);
 $router->post('/api/client/update', [ClientController::class, 'update']);
+$router->get('/api/trip', [TripController::class, 'show']);
+$router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/trip/create', [TripController::class, 'store']);
 
 
