@@ -9,7 +9,7 @@ header("Access-Control-Allow-Origin: $allowedOrigin");
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Authorization, Content-Type');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Max-Age: 86400'); // cache del preflight 24h
+header('Access-Control-Max-Age: 86400');
 header('Vary: Origin');
 
 // ⚙️ Responder automáticamente los preflight (OPTIONS)
@@ -23,6 +23,7 @@ require_once __DIR__ . '/../includes/app.php';
 use Controllers\ClientController;
 use Controllers\LoginController;
 use Controllers\TripController;
+use Controllers\CouponController;
 use MVC\Router;
 
 
@@ -45,6 +46,7 @@ $router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/trip/create', [TripController::class, 'store']);
 $router->post('/api/trip/update', [TripController::class, 'update']);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy']);
+$router->get('/api/coupons', [CouponController::class, 'index']);
 
 
 
