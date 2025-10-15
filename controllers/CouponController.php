@@ -114,4 +114,51 @@ class CouponController
             'data' => $coupon
         ], 200);
     }
+
+
+
+    public static function destroy(): void
+    {
+        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Headers: Authorization, Content-Type');
+        header('Access-Control-Allow-Methods:POST');
+        header('Allow: POST');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send(['success' => false, 'message' => 'Method Not Allowed'], 405);
+            exit;
+        }
+
+        $payload = self::readBody();
+        $id = $payload['id'] ?? null;
+
+        if (!$id) {
+            JsonResponse::send(['success' => false, 'message' => 'Falta id del cupon'], 400);
+        }
+
+        try {
+            $coupon = Coupon::find($id);
+        } catch (Throwable $e) {
+            JsonResponse::send(['success' => false, 'message' => 'Error al buscar el cupon'], 500);
+        }
+
+        if (!$coupon) {
+            JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
+        }
+
+        try {
+            $res = $coupon->eliminar();
+        } catch (Throwable $e) {
+            JsonResponse::send(['success' => false, 'message' => 'Error al eliminar el cupon'], 500);
+        }
+
+        if (!$res) {
+            JsonResponse::send(['success' => false, 'message' => 'No se pudo eliminar el cupon'], 500);
+        }
+        
+        JsonResponse::send([
+            'success' => true,
+            'message' => 'cupon eliminado correctamente.',
+        ], 200);
+    }
 }

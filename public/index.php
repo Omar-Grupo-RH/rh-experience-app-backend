@@ -48,6 +48,7 @@ $router->post('/api/trip/update', [TripController::class, 'update']);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy']);
 $router->get('/api/coupons', [CouponController::class, 'index']);
 $router->post('/api/coupon', [CouponController::class, 'store']);
+$router->post('/api/coupon/destroy', [CouponController::class, 'destroy']);
 
 
 
