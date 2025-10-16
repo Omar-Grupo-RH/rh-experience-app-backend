@@ -45,7 +45,7 @@ final class ClientValidator
         if ($c->born_date === '' || $c->born_date === null) {
             $e[] = 'La fecha de nacimiento es obligatoria';
         } elseif (!self::isAdult($c)) {
-            $e[] = 'El cliente debe ser mayor de edad';
+            $e[] = 'Debe ser mayor de edad';
         }
         return $e;
     }
