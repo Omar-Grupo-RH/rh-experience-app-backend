@@ -58,8 +58,7 @@ class ClientController
 
             $clients  = Client::whereAll('admin', 0);
             JsonResponse::send([
-                'success' => true,
-                'message' => 'Cliente creado correctamente',
+             
                 'data' => $clients
             ], 201);
         }

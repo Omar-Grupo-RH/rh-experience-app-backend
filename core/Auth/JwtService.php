@@ -24,7 +24,7 @@ final class JwtService
             'nbf' => $now,
             'exp' => $now + $ttl,
             'sub' => (string)$userId,
-            
+
             'jti' => bin2hex(random_bytes(16)),
         ], $extra);
 

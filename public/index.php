@@ -2,19 +2,29 @@
 // ======================================
 // 🛡️ CORS GLOBAL (antes de despachar rutas)
 // ======================================
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowedOrigin = 'http://localhost:3000'; // tu app Vue
 
-header("Access-Control-Allow-Origin: $allowedOrigin");
+$allowedOrigin = 'http://localhost:3000';
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+
+if ($origin === $allowedOrigin) {
+    header("Access-Control-Allow-Origin: $allowedOrigin");
+}
+
 header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Headers: Authorization, Content-Type');
+header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Max-Age: 86400');
 header('Vary: Origin');
 
-// ⚙️ Responder automáticamente los preflight (OPTIONS)
+// ⚙️ Manejo de preflight (muy importante)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204); // Sin contenido
+    if ($origin === $allowedOrigin) {
+        header("Access-Control-Allow-Origin: $allowedOrigin");
+    }
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    http_response_code(204);
     exit;
 }
 
@@ -26,34 +36,29 @@ use Controllers\TripController;
 use Controllers\CouponController;
 use MVC\Router;
 
-
 $router = new Router();
 
+// === Rutas ===
 
-//Iniciar Sesion
+// Login / Logout
 $router->post('/api/login', [LoginController::class, 'login']);
 $router->post('/api/logout', [LoginController::class, 'logout']);
 $router->post('/api/client/create', [ClientController::class, 'store']);
 
-
-//Admin
-$router->get('/api/clients', [ClientController::class, 'all']);
-$router->get('/api/client', [ClientController::class, 'show']);
-$router->post('/api/client/destroy', [ClientController::class, 'destroy']);
-$router->post('/api/client/update', [ClientController::class, 'update']);
+// Admin
+$router->get('/api/clients', [ClientController::class, 'all'], true);
+$router->get('/api/client', [ClientController::class, 'show'], true);
+$router->post('/api/client/destroy', [ClientController::class, 'destroy'],true);
+$router->post('/api/client/update', [ClientController::class, 'update'],true);
 $router->get('/api/trip', [TripController::class, 'show']);
 $router->get('/api/trips', [TripController::class, 'index']);
-$router->post('/api/trip/create', [TripController::class, 'store']);
-$router->post('/api/trip/update', [TripController::class, 'update']);
-$router->post('/api/trip/destroy', [TripController::class, 'destroy']);
+$router->post('/api/trip/create', [TripController::class, 'store'],true);
+$router->post('/api/trip/update', [TripController::class, 'update'],true);
+$router->post('/api/trip/destroy', [TripController::class, 'destroy'],true);
 $router->get('/api/coupons', [CouponController::class, 'index']);
-$router->get('/api/coupon', [CouponController::class, 'show']);
-$router->post('/api/coupon', [CouponController::class, 'store']);
-$router->post('/api/coupon/update', [CouponController::class, 'update']);
-$router->post('/api/coupon/destroy', [CouponController::class, 'destroy']);
-
-
-
-
+$router->get('/api/coupon', [CouponController::class, 'show'],true);
+$router->post('/api/coupon', [CouponController::class, 'store'],true);
+$router->post('/api/coupon/update', [CouponController::class, 'update'],true);
+$router->post('/api/coupon/destroy', [CouponController::class, 'destroy'],true);
 
 $router->comprobarRutas();

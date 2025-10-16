@@ -31,11 +31,6 @@ class TripController
 
     public static function index()
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods:GET');
-        header('Allow: GET');
 
         $trips = Trip::all();
 
@@ -48,11 +43,7 @@ class TripController
 
     public static function show()
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods:GET');
-        header('Allow: GET');
+   
 
 
 
@@ -75,11 +66,7 @@ class TripController
 
     public static function store()
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods:POST');
-        header('Allow: POST');
+       
         // Lógica para obtener todos los clientes
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payload = self::readBody();
@@ -122,11 +109,7 @@ class TripController
     public static function update(): void
     {
 
-        header('Access-Control-Allow-Origin: http://localhost:3000');
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
-        header('Access-Control-Allow-Methods: POST, OPTIONS');
-        header('Content-Type: application/json; charset=utf-8');
+        
 
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
             http_response_code(204);
@@ -186,11 +169,7 @@ class TripController
 
     public static function destroy(): void
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000');
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
-        header('Access-Control-Allow-Methods: POST, OPTIONS');
-        header('Content-Type: application/json; charset=utf-8');
+     
 
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
             http_response_code(204);

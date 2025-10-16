@@ -11,13 +11,10 @@ class LoginController
 {
     public static function login(): void
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000'); // tu front
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods:POST');
-        header('Allow: POST');
+
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            header('Allow: POST');
+
 
             // Lee JSON
             $raw = file_get_contents('php://input');
@@ -40,7 +37,7 @@ class LoginController
             if (!password_verify($password, $user->password)) {
                 JsonResponse::send(['success' => false, 'message' => 'Contraseña incorrecta'], 401);
             }
-            
+
             // Emitir token
             $accessToken = JwtService::issueAccessToken((int)$user->id, [
                 'admin' => $user->admin
@@ -49,8 +46,9 @@ class LoginController
             // Opción A: devolver solo JSON
             JsonResponse::send([
                 'token' => $accessToken,
-                'first_name'  => $user->first_name,   // ajusta a tu columna real
-                'last_name'  => $user->last_name,   // ajusta a tu columna real
+
+                'first_name'  => $user->first_name,
+                'last_name'  => $user->last_name,
                 'email' => $user->email,
                 'phone' => $user->phone,
                 'admin' => $user->admin
