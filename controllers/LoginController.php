@@ -43,15 +43,15 @@ class LoginController
                 'admin' => $user->admin
             ]);
 
-            // Opción A: devolver solo JSON
             JsonResponse::send([
                 'token' => $accessToken,
-
                 'first_name'  => $user->first_name,
                 'last_name'  => $user->last_name,
                 'email' => $user->email,
                 'phone' => $user->phone,
-                'admin' => $user->admin
+                'admin' => $user->admin,
+                'born_date' => $user->born_date,
+                'allergies' => $user->allergies
             ], 200);
         }
     }

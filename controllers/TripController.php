@@ -4,6 +4,7 @@ namespace Controllers;
 
 use App\Http\JsonResponse;
 use App\Time\Clock;
+use Model\Ticket;
 use Model\Trip;
 use Throwable;
 
@@ -28,26 +29,40 @@ class TripController
         }
         return $payload;
     }
-
     public static function index()
     {
+        $trips = Trip::all(); // Traer todos los viajes
+        $response = [];
 
-        $trips = Trip::all();
+        foreach ($trips as $trip) {
+            // Traer todos los tickets relacionados con este viaje
+            $tickets = Ticket::whereAll('trip_id', $trip->id);
+            // Contar el total de asientos ocupados
+            $unavaibleSeats = 0;
+            foreach ($tickets as $ticket) {
+                $seatNumbersArray = json_decode($ticket->seat_numbers, true) ?? [];
+                $unavaibleSeats += count($seatNumbersArray);
+            }
+            // Generar respuesta limpia para cada viaje
+            $response[] = [
+                'id'              => (int) $trip->id,
+                'title'           => $trip->title,
+                'trip_date'       => $trip->trip_date,
+                'total_seats'     => (int) $trip->total_seats,
+                'unavaible_seats' => $unavaibleSeats, // total de asientos ocupados
+            ];
+        }
 
+        // Enviar respuesta JSON
         JsonResponse::send([
             'success' => true,
-            'data' => $trips
-        ], 201);
+            'data'    => $response,
+        ], 200);
     }
-
 
     public static function show()
     {
-   
-
-
-
-        $id = $_GET['id'] ?? null; // si usas query param
+        $id = $_GET['id'] ?? null;
         if (!$id) {
             JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
         }
@@ -57,16 +72,38 @@ class TripController
             JsonResponse::send(['success' => false, 'message' => 'Evento no encontrado'], 404);
         }
 
+        // Traer todos los tickets de este viaje
+        $ticketsByTrip = Ticket::whereAll('trip_id', $id);
+
+        // Contar todos los asientos ocupados y acumular posiciones
+        $unavaibleSeats = 0;
+        $seatsLocation = [];
+
+        foreach ($ticketsByTrip as $ticket) {
+            $seatNumbersArray = json_decode($ticket->seat_numbers, true) ?? [];
+            $unavaibleSeats += count($seatNumbersArray);
+            $seatsLocation = array_merge($seatsLocation, $seatNumbersArray);
+        }
+
         JsonResponse::send([
             'success' => true,
-            'message' => 'Cliente encontrado',
-            'data' => $trip,
-        ], 200); // ✅ 200 en GET
+            'data' => [
+                'trip_id'         => (int) $trip->id,
+                'title'           => $trip->title,
+                'trip_date'       => $trip->trip_date,
+                'total_seats'     => (int) $trip->total_seats,
+                'avaible_seats'   => (int) $trip->avaible_seats,
+                'unavaible_seats' => $unavaibleSeats,
+                'seats_location'  => $seatsLocation, // array con posiciones ocupadas
+            ],
+        ], 200);
     }
+
+
 
     public static function store()
     {
-       
+
         // Lógica para obtener todos los clientes
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payload = self::readBody();
@@ -101,6 +138,7 @@ class TripController
                     'title'      => $trip->title,
                     'trip_date'  => $trip->trip_date,
                     'total_seats' => (int)$trip->total_seats,
+                    'avaible_seats' => (int)$trip->avaible_seats,
                 ],
             ], 201);
         }
@@ -108,9 +146,6 @@ class TripController
 
     public static function update(): void
     {
-
-        
-
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
             http_response_code(204);
             exit;
@@ -169,7 +204,7 @@ class TripController
 
     public static function destroy(): void
     {
-     
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
             http_response_code(204);

@@ -17,6 +17,8 @@ class Trip extends ActiveRecord
     public $trip_date;
     public $total_seats;
     public $title;
+    public $avaible_seats;
+
 
     public function __construct($args = [])
     {
