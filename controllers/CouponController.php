@@ -75,6 +75,7 @@ class CouponController
         if (!$coupon) {
             JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
         }
+        $coupon->discount = $coupon->discount * 100;
 
         JsonResponse::send([
             'success' => true,
@@ -106,9 +107,11 @@ class CouponController
         try {
             if (Coupon::where('code', $coupon->code)) {
                 JsonResponse::send(['success' => false, 'error' => 'El codigo de descuento ya está en uso.'], 422);
+                exit;
             }
         } catch (Throwable $e) {
             JsonResponse::send(['success' => false, 'message' => 'Error de base de datos (unicidad codigo)'], 500);
+            exit;
         }
 
         if ($coupon->discount < 0) {
@@ -124,6 +127,8 @@ class CouponController
             JsonResponse::send(['success' => false, 'error' => 'No puedes elegir una fecha pasada.'], 422);
             exit;
         }
+
+        $coupon->discount = $coupon->discount / 100;
 
 
         // Guardar
@@ -195,6 +200,9 @@ class CouponController
                 $coupon->$k = trim((string)$payload[$k]);
             }
         }
+
+        $coupon->discount = $coupon->discount / 100;
+
         try {
             $result = $coupon->guardar();
         } catch (Throwable $e) {

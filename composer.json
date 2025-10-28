@@ -20,6 +20,9 @@
   "require": {
     "phpmailer/phpmailer": "^6.9",
     "vlucas/phpdotenv": "^5.6",
-    "firebase/php-jwt": "^6.11"
+    "firebase/php-jwt": "^6.11",
+    "stripe/stripe-php": "^18.0",
+    "dompdf/dompdf": "^3.1",
+    "endroid/qr-code": "^5.0"
   }
 }
