@@ -48,9 +48,7 @@ $router->post('/api/client/create', [ClientController::class, 'store']);
 
 // Admin
 $router->get('/api/clients', [ClientController::class, 'all'], true);
-$router->get('/api/client', [ClientController::class, 'show'], true);
-$router->post('/api/client/destroy', [ClientController::class, 'destroy'], true);
-$router->post('/api/client/update', [ClientController::class, 'update'], true);
+
 $router->get('/api/trip', [TripController::class, 'show']);
 $router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/trip/create', [TripController::class, 'store'], true);
