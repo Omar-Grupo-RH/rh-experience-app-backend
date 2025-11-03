@@ -61,7 +61,7 @@ $router->post('/api/coupon', [CouponController::class, 'store'], true);
 $router->post('/api/coupon/update', [CouponController::class, 'update'], true);
 $router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true);
 $router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
-$router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], false);
+$router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 
 //Public API
 $router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
