@@ -34,6 +34,7 @@ use Controllers\ClientController;
 use Controllers\LoginController;
 use Controllers\TripController;
 use Controllers\CouponController;
+use Controllers\DashboardController;
 use Controllers\PaymentAPI;
 use MVC\Router;
 
@@ -59,6 +60,8 @@ $router->get('/api/coupon', [CouponController::class, 'show'], true);
 $router->post('/api/coupon', [CouponController::class, 'store'], true);
 $router->post('/api/coupon/update', [CouponController::class, 'update'], true);
 $router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true);
+$router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
+$router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], false);
 
 //Public API
 $router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);

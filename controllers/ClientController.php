@@ -13,37 +13,6 @@ use App\Time\Clock;
 
 class ClientController
 {
-    /* =======================
-       Helpers del controlador
-       ======================= */
-
-    /** Lee el cuerpo (JSON o form) y devuelve array asociativo. Lanza 400 si JSON inválido. */
-    private static function readBody(): array
-    {
-        $payload = $_POST;
-        $isJson  = stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false;
-
-        if (empty($payload) && $isJson) {
-            $raw = file_get_contents('php://input');
-            $payload = json_decode($raw, true);
-            if (!is_array($payload)) {
-                JsonResponse::send(['success' => false, 'message' => 'JSON inválido'], 400);
-            }
-        }
-
-        // Normaliza strings
-        foreach ($payload as $k => $v) {
-            if (is_string($v)) $payload[$k] = trim($v);
-        }
-        return $payload;
-    }
-
-  
-
-    /* =======================
-       GET /api/clients  (mostrar)
-       ======================= */
-    
 
     /* =======================
        GET /api/clients/id  (mostrar un cliente)
@@ -83,6 +52,4 @@ class ClientController
             'data' => $client,
         ], 200); // ✅ 200 en GET
     }
-
-   
 }
