@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../includes/app.php';
 
 use Controllers\ClientController;
+use Controllers\CommentsController;
 use Controllers\LoginController;
 use Controllers\TripController;
 use Controllers\CouponController;
@@ -66,6 +67,9 @@ $router->get('/api/travels/passengers', [DashboardController::class, 'getPasseng
 //Public API
 $router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
 $router->post('/api/payment', [PaymentAPI::class, 'paymentIntent']);
+
+$router->post('/api/comments/create', [CommentsController::class, 'store'], false);
+$router->get('/api/comments', [CommentsController::class, 'index'], false);
 
 
 $router->comprobarRutas();

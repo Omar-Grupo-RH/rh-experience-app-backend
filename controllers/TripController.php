@@ -29,6 +29,7 @@ class TripController
         }
         return $payload;
     }
+    
     public static function index()
     {
         $trips = Trip::all(); // Traer todos los viajes

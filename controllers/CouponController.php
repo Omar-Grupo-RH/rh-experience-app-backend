@@ -141,7 +141,9 @@ class CouponController
         if (empty($result['resultado'])) {
             JsonResponse::send(['success' => false, 'message' => 'No se pudo crear el cupon'], 500);
         }
+        
         $coupon->id = $result['id'] ?? null;
+
         JsonResponse::send([
             'success' => true,
             'message' => 'Cupon creado correctamente',
