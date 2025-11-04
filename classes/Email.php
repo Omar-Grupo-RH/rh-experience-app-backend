@@ -47,7 +47,7 @@ class Email
             $this->mail->Host       = 'smtp.gmail.com';
             $this->mail->SMTPAuth   = true;
             $this->mail->Username   = $_ENV['GMAIL_ACCOUNT'];
-            $this->mail->Password   = $_ENV['GMAIL_PASSWORD']; // Usa App Password si tienes 2FA
+            $this->mail->Password   = $_ENV['GMAIL_PASSWORD']; 
             $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $this->mail->Port       = 587;
 

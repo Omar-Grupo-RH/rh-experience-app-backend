@@ -37,12 +37,6 @@ class PaymentAPI
 
     public static function paymentIntent(): void
     {
-        header('Access-Control-Allow-Origin: http://localhost:3000');
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type');
-        header('Access-Control-Allow-Methods:POST');
-        header('Allow: POST');
-
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             JsonResponse::send(['success' => false, 'message' => 'Method Not Allowed'], 405);
             exit;
@@ -56,6 +50,19 @@ class PaymentAPI
             exit;
         }
 
+        // --- MONTO (obligatorio para Stripe) ---
+        // Esperamos total en unidades de la moneda (p.ej. 2100.00 MXN)
+        // Lo convertimos a centavos. Si ya viene en centavos, adapta esta parte.
+        $amountUnits = $payload['total'] ?? null;
+        if (!is_numeric($amountUnits) || $amountUnits <= 0) {
+            JsonResponse::send(['success' => false, 'message' => 'Total inválido'], 422);
+            exit;
+        }
+        // Redondeo seguro a centavos
+        $amountInCents = (int) round(((float)$amountUnits) * 100);
+
+        $currency = $payload['currency'] ?? ($_ENV['STRIPE_CURRENCY'] ?? 'mxn'); // default MXN
+
         $ticket = null;
         $createdPassengerIds = [];
 
@@ -63,16 +70,12 @@ class PaymentAPI
         $cleanup = function () use (&$ticket, &$createdPassengerIds) {
             try {
                 if ($ticket && !empty($ticket->id)) {
-                    // Si tienes FK ON DELETE CASCADE, esto borra también los pasajeros:
-                    $ticket->eliminar();
+                    $ticket->eliminar(); // si hay cascada, borra pasajeros
                 } else {
-                    // Si NO tienes FK, limpia manualmente pasajeros creados:
                     if (!empty($createdPassengerIds)) {
                         foreach ($createdPassengerIds as $pid) {
                             $p = TicketPassenger::find($pid);
-                            if ($p) {
-                                $p->eliminar();
-                            }
+                            if ($p) $p->eliminar();
                         }
                     }
                 }
@@ -127,7 +130,6 @@ class PaymentAPI
             }
             $ticket->id = (int)($resTicket['id'] ?? 0);
             if (!$ticket->id) {
-                // Por si la BD no devolvió id
                 $cleanup();
                 JsonResponse::send(['success' => false, 'message' => 'Ticket creado sin ID'], 500);
                 exit;
@@ -153,15 +155,12 @@ class PaymentAPI
 
                 $resP = $passenger->guardar();
                 if (empty($resP['resultado'])) {
-                    // Falló crear este pasajero -> eliminar lo creado
                     $cleanup();
                     JsonResponse::send(['success' => false, 'message' => 'No se pudo crear un pasajero'], 500);
                     exit;
                 }
                 $pid = (int)($resP['id'] ?? 0);
-                if ($pid) {
-                    $createdPassengerIds[] = $pid;
-                }
+                if ($pid) $createdPassengerIds[] = $pid;
             }
         } catch (\Throwable $e) {
             $cleanup();
@@ -180,20 +179,53 @@ class PaymentAPI
                 }
                 $resC = $coupon->guardar();
                 if (empty($resC['resultado'])) {
-                    // Falló actualizar cupón -> revertir ticket + pasajeros
                     $cleanup();
                     JsonResponse::send(['success' => false, 'message' => 'No se pudo actualizar el cupon'], 500);
                     exit;
                 }
             } catch (\Throwable $e) {
-                // Fallo cupón -> revertir ticket + pasajeros
                 $cleanup();
                 JsonResponse::send(['success' => false, 'message' => 'Error al actualizar el cupon'], 500);
                 exit;
             }
         }
 
-        // 5) PDF + Email (esto NO revierte la BD si falla)
+        // 5) Crear PaymentIntent (NUEVO)
+        try {
+            \Stripe\Stripe::setApiKey($_ENV['SECRET_KEY_STRIPE']);
+
+            // Idempotency key para evitar intentos duplicados si el front reintenta
+            $idempotencyKey = 'pi_ticket_' . $ticket->id . '_' . md5(json_encode([$amountInCents, $currency, $payload['seats']]));
+
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $amountInCents,          // centavos
+                'currency' => $currency,             // 'mxn' por defecto
+                'automatic_payment_methods' => ['enabled' => true],
+                'metadata' => [
+                    'ticket_id'   => (string)$ticket->id,
+                    'trip_id'     => (string)$payload['trip_id'],
+                    'seats'       => implode(',', $payload['seats'] ?? []),
+                    'coupon_id'   => (string)($payload['couponId'] ?? ''),
+                    'customer_email' => (string)($payload['tickets_email'] ?? ''),
+                    'tickets_name'   => (string)($payload['tickets_name'] ?? ''),
+                    'date'        => (string)($payload['date'] ?? ''),
+                ],
+                'receipt_email' => $payload['tickets_email'] ?? null, // opcional
+            ], [
+                'idempotency_key' => $idempotencyKey
+            ]);
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            // Stripe falló -> revertimos lo creado en BD
+            $cleanup();
+            JsonResponse::send(['success' => false, 'message' => 'Stripe error: ' . $e->getMessage()], 500);
+            exit;
+        } catch (\Throwable $e) {
+            $cleanup();
+            JsonResponse::send(['success' => false, 'message' => 'Error creando PaymentIntent'], 500);
+            exit;
+        }
+
+        // 6) (OPCIONAL) PDF + Email — RECOMIENDO mover esto al webhook cuando status=succeeded
         $pdfPath = null;
         try {
             $pdfPath = TicketPdfService::buildTicketsPdf($payload);
@@ -204,7 +236,7 @@ class PaymentAPI
         $email = new Email(
             $payload['tickets_email'] ?? '',
             $payload['tickets_name']  ?? '',
-            'Confirmación de Reserva',
+            'Confirmación de Reserva (pendiente de pago)',
             formatearFecha($payload['date']),
             implode(', ', $payload['seats'] ?? []),
             $payload['trip_id'] ?? ''
@@ -223,16 +255,47 @@ class PaymentAPI
         }
 
         if ($sent && $pdfPath && is_file($pdfPath)) {
-            if (!@unlink($pdfPath)) {
-                error_log("No se pudo eliminar el PDF: {$pdfPath}");
-            }
+            if (!@unlink($pdfPath)) error_log("No se pudo eliminar el PDF: {$pdfPath}");
         }
 
-        // 6) Respuesta final
+        // 7) Respuesta final con clientSecret
         JsonResponse::send([
-            'success' => true,
-            'message' => 'Reservacion exitosa, revisa tu correo electronico.',
+            'success'       => true,
+            'message'       => 'Reservación creada. Completa el pago para confirmar.',
+            'clientSecret'  => $paymentIntent->client_secret,
+            'payment_intent_id' => $paymentIntent->id,
+            'ticket_id'     => $ticket->id,
+            'currency'      => $currency,
+            'amount'        => $amountInCents, // centavos
         ], 200);
+    }
+
+
+    public static function paymentTest(): void
+    {
+        header('Content-Type: application/json');
+
+        \Stripe\Stripe::setApiKey($_ENV['SECRET_KEY_STRIPE']);
+
+        $input = json_decode(file_get_contents('php://input'), true);
+
+
+        try {
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $input['amount'], // en centavos
+                'currency' => 'usd',
+                'automatic_payment_methods' => [
+                    'enabled' => true,
+                ],
+            ]);
+
+            echo json_encode([
+                'clientSecret' => $paymentIntent->client_secret,
+            ]);
+        } catch (Error $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
     }
 
 

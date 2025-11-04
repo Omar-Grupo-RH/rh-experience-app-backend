@@ -71,4 +71,6 @@ $router->post('/api/comments/create', [CommentsController::class, 'store']);
 $router->get('/api/comments', [CommentsController::class, 'index']);
 $router->get('/api/coupons', [CouponController::class, 'index']);
 
+$router->post('/api/testPayment', [PaymentAPI::class, 'paymentTest']);
+
 $router->comprobarRutas();

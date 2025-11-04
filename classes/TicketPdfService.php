@@ -45,7 +45,6 @@ class TicketPdfService
         'email'        => $pax['email'] ?? '',
         'phone'        => $pax['phone'] ?? '',
         'ticket_code'  => $ticketCode,
-        'qr_data_uri'  => $qrDataUri,
         'index'        => $idx + 1,
         'count'        => count($passengers),
       ]);
