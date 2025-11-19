@@ -11,7 +11,7 @@ use App\Http\JsonResponse;
 use Model\Ticket;
 use Classes\Email;
 use Classes\TicketPdfService;
-
+use Model\Buyer;
 
 class PaymentAPI
 {
@@ -35,6 +35,7 @@ class PaymentAPI
         return $payload;
     }
 
+
     public static function paymentIntent(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -45,7 +46,7 @@ class PaymentAPI
         $payload = self::readBody();
 
         // Validación mínima
-        if (empty($payload['trip_id']) || empty($payload['seats']) || empty($payload['passengers'])) {
+        if (empty($payload['trip_data']['trip_id']) || empty($payload['trip_data']['seats']) || empty($payload['passengers'])) {
             JsonResponse::send(['success' => false, 'message' => 'Payload incompleto'], 422);
             exit;
         }
@@ -53,7 +54,7 @@ class PaymentAPI
         // --- MONTO (obligatorio para Stripe) ---
         // Esperamos total en unidades de la moneda (p.ej. 2100.00 MXN)
         // Lo convertimos a centavos. Si ya viene en centavos, adapta esta parte.
-        $amountUnits = $payload['total'] ?? null;
+        $amountUnits = $payload['price_data']['total'] ?? null;
         if (!is_numeric($amountUnits) || $amountUnits <= 0) {
             JsonResponse::send(['success' => false, 'message' => 'Total inválido'], 422);
             exit;
@@ -61,7 +62,7 @@ class PaymentAPI
         // Redondeo seguro a centavos
         $amountInCents = (int) round(((float)$amountUnits) * 100);
 
-        $currency = $payload['currency'] ?? ($_ENV['STRIPE_CURRENCY'] ?? 'mxn'); // default MXN
+        $currency = $payload['price_data']['currency'] ?? ($_ENV['STRIPE_CURRENCY'] ?? 'mxn'); // default MXN
 
         $ticket = null;
         $createdPassengerIds = [];
@@ -86,9 +87,9 @@ class PaymentAPI
 
         // 1) Validar cupón (si viene)
         $coupon = null;
-        if (!empty($payload['couponId'])) {
+        if (!empty($payload['price_data']['couponId'])) {
             try {
-                $coupon = Coupon::where('id', $payload['couponId']);
+                $coupon = Coupon::where('id', $payload['price_data']['couponId']);
                 if (!$coupon) {
                     JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
                     exit;
@@ -119,8 +120,8 @@ class PaymentAPI
         // 2) Crear Ticket
         try {
             $ticket = new Ticket([
-                'trip_id'      => $payload['trip_id'],
-                'seat_numbers' => json_encode($payload['seats'], JSON_UNESCAPED_UNICODE),
+                'trip_id'      => $payload['trip_data']['trip_id'],
+                'seat_numbers' => json_encode($payload['trip_data']['seats'], JSON_UNESCAPED_UNICODE),
             ]);
 
             $resTicket = $ticket->guardar();
@@ -195,7 +196,7 @@ class PaymentAPI
             \Stripe\Stripe::setApiKey($_ENV['SECRET_KEY_STRIPE']);
 
             // Idempotency key para evitar intentos duplicados si el front reintenta
-            $idempotencyKey = 'pi_ticket_' . $ticket->id . '_' . md5(json_encode([$amountInCents, $currency, $payload['seats']]));
+            $idempotencyKey = 'pi_ticket_' . $ticket->id . '_' . md5(json_encode([$amountInCents, $currency, $payload['trip_data']['seats']]));
 
             $paymentIntent = \Stripe\PaymentIntent::create([
                 'amount' => $amountInCents,          // centavos
@@ -203,14 +204,14 @@ class PaymentAPI
                 'automatic_payment_methods' => ['enabled' => true],
                 'metadata' => [
                     'ticket_id'   => (string)$ticket->id,
-                    'trip_id'     => (string)$payload['trip_id'],
-                    'seats'       => implode(',', $payload['seats'] ?? []),
-                    'coupon_id'   => (string)($payload['couponId'] ?? ''),
-                    'customer_email' => (string)($payload['tickets_email'] ?? ''),
-                    'tickets_name'   => (string)($payload['tickets_name'] ?? ''),
-                    'date'        => (string)($payload['date'] ?? ''),
+                    'trip_id'     => (string)$payload['trip_data']['trip_id'],
+                    'seats'       => implode(',', $payload['trip_data']['seats'] ?? []),
+                    'coupon_id'   => (string)($payload['price_data']['couponId'] ?? ''),
+                    'customer_email' => (string)($payload['trip_data']['tickets_email'] ?? ''),
+                    'tickets_name'   => (string)($payload['trip_data']['tickets_name'] ?? ''),
+                    'date'        => (string)($payload['trip_data']['date'] ?? ''),
                 ],
-                'receipt_email' => $payload['tickets_email'] ?? null, // opcional
+                'receipt_email' => $payload['trip_data']['tickets_email'] ?? null, // opcional
             ], [
                 'idempotency_key' => $idempotencyKey
             ]);
@@ -225,6 +226,21 @@ class PaymentAPI
             exit;
         }
 
+
+        //Guardamos la data del que compro los boletos
+
+        $buyer = new Buyer($payload['buyer']);
+
+
+        try {
+            $buyer->guardar();
+        } catch (Throwable $e) {
+            $cleanup();
+            JsonResponse::send(['success' => false, 'message' => 'Error creando el buyer'], 500);
+            exit;
+        }
+
+
         // 6) (OPCIONAL) PDF + Email — RECOMIENDO mover esto al webhook cuando status=succeeded
         $pdfPath = null;
         try {
@@ -234,16 +250,16 @@ class PaymentAPI
         }
 
         $email = new Email(
-            $payload['tickets_email'] ?? '',
-            $payload['tickets_name']  ?? '',
+            $payload['trip_data']['tickets_email'] ?? '',
+            $payload['trip_data']['tickets_name']  ?? '',
             'Confirmación de Reserva (pendiente de pago)',
-            formatearFecha($payload['date']),
-            implode(', ', $payload['seats'] ?? []),
-            $payload['trip_id'] ?? ''
+            formatearFecha($payload['trip_data']['date']),
+            implode(', ', $payload['trip_data']['seats'] ?? []),
+            $payload['trip_data']['trip_id'] ?? ''
         );
 
         if ($pdfPath && file_exists($pdfPath)) {
-            $fileName = sprintf('RH-Tickets-Trip-%s.pdf', $payload['tickets_name'] ?? 'X');
+            $fileName = sprintf('RH-Tickets-Trip-%s.pdf', $payload['trip_data']['tickets_name'] ?? 'X');
             $email->addAttachment($pdfPath, $fileName);
         }
 

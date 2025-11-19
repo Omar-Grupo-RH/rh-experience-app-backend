@@ -1,32 +1,44 @@
 <?php
 // ======================================
 // 🛡️ CORS GLOBAL (antes de despachar rutas)
-// ======================================
+// =====================================
 
-$allowedOrigin = 'http://localhost:3000';
+// Lista blanca (incluye esquema + host + puerto)
+$allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:4321',
+    // Agrega aquí otros, p. ej. 'http://127.0.0.1:3000'
+];
+
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$isAllowed = in_array($origin, $allowedOrigins, true);
 
-if ($origin === $allowedOrigin) {
-    header("Access-Control-Allow-Origin: $allowedOrigin");
+// Si el Origin es válido, refléjalo
+if ($isAllowed) {
+    header("Access-Control-Allow-Origin: {$origin}");
+    header('Access-Control-Allow-Credentials: true');
 }
 
-header('Access-Control-Allow-Credentials: true');
+// Siempre variar por Origin para caches
+header('Vary: Origin');
+
+// Headers comunes
 header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Max-Age: 86400');
-header('Vary: Origin');
 
-// ⚙️ Manejo de preflight (muy importante)
+// Preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    if ($origin === $allowedOrigin) {
-        header("Access-Control-Allow-Origin: $allowedOrigin");
+    if ($isAllowed) {
+        header("Access-Control-Allow-Origin: {$origin}");
+        header('Access-Control-Allow-Credentials: true');
     }
-    header('Access-Control-Allow-Credentials: true');
     header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     http_response_code(204);
     exit;
 }
+
 
 require_once __DIR__ . '/../includes/app.php';
 
