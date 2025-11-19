@@ -2,6 +2,8 @@
 
 namespace Model;
 
+use DateTime;
+use DateTimeZone;
 class Order extends ActiveRecord
 {
     protected static $tabla = 'orders';
@@ -20,7 +22,7 @@ class Order extends ActiveRecord
 
     public $id, $ticket_id, $buyer_id, $coupon_id, $subtotal_cents, $discount_cents, $total_cents, $currency, $status, $created_at;
 
-    
+
     public function __construct($a = [])
     {
         $this->id = $a['id'] ?? null;
@@ -31,7 +33,7 @@ class Order extends ActiveRecord
         $this->discount_cents = (int)($a['discount_cents'] ?? 0);
         $this->total_cents    = (int)($a['total_cents'] ?? 0);
         $this->currency = $a['currency'] ?? 'MXN';
-        $this->status   = $a['status'] ?? 'pending';
+        $this->status   = $a['status'] ?? '';
         $this->created_at = $a['created_at'] ?? $this->nowDateMerida();
     }
 

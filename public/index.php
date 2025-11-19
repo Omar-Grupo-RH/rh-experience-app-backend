@@ -76,13 +76,16 @@ $router->post('/api/comments/update', [CommentsController::class, 'update'], tru
 
 //Public API
 $router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
-$router->post('/api/payment', [PaymentAPI::class, 'paymentIntent']);
 $router->get('/api/trip', [TripController::class, 'show']);
 $router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/comments/create', [CommentsController::class, 'store']);
 $router->get('/api/comments', [CommentsController::class, 'index']);
 $router->get('/api/coupons', [CouponController::class, 'index']);
+$router->post('/api/payment',          [PaymentAPI::class, 'paymentIntent']);
+$router->post('/api/payment/confirm',  [PaymentAPI::class, 'confirmPayment']);
+$router->post('/api/payment/cancel',   [PaymentAPI::class, 'cancelPayment']);
 
-$router->post('/api/testPayment', [PaymentAPI::class, 'paymentTest']);
+
+// $router->post('/api/testPayment', [PaymentAPI::class, 'paymentTest']);
 
 $router->comprobarRutas();

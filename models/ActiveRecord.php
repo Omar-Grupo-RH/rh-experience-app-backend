@@ -320,6 +320,7 @@ class ActiveRecord
     }
 
 
+
     // Actualizar el registro
     public function actualizar()
     {
@@ -329,7 +330,16 @@ class ActiveRecord
         // Iterar para ir agregando cada campo de la BD
         $valores = [];
         foreach ($atributos as $key => $value) {
-            $valores[] = "{$key}='{$value}'";
+            if (is_null($value)) {
+                // NULL sin comillas
+                $valores[] = "{$key}=NULL";
+            } elseif (is_int($value) || is_float($value)) {
+                // números sin comillas
+                $valores[] = "{$key}={$value}";
+            } else {
+                // strings con comillas (ya escapados en sanitizarAtributos)
+                $valores[] = "{$key}='{$value}'";
+            }
         }
 
         // Consulta SQL
@@ -342,6 +352,7 @@ class ActiveRecord
         $resultado = self::$db->query($query);
         return ['resultado' => $resultado, 'id' => $this->id];
     }
+
 
     // Eliminar un Registro por su ID
     public function eliminar()
