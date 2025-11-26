@@ -68,9 +68,9 @@ class DashboardController
             return [
                 'id'             => (int) $o->id,
                 'buyer_name'     => $o->buyer_name,
-                'subtotal_cents' => (int) $o->subtotal_cents,
-                'discount_cents' => (int) $o->discount_cents,
-                'total_cents'    => (int) $o->total_cents,
+                'subtotal_cents' => (int) $o->subtotal_cents / 100,
+                'discount_cents' => (int) $o->discount_cents / 100,
+                'total_cents'    => (int) $o->total_cents / 100,
                 'status'         => $o->status,
                 'created_at'     => $o->created_at,
                 'trip_date'      => $o->trip_date,
@@ -79,9 +79,9 @@ class DashboardController
         }, $rowsObj);
 
         $summary = [
-            'gross_cents'            => isset($summaryRaw['gross_cents']) ? (int) $summaryRaw['gross_cents'] : 0,
-            'net_cents'              => isset($summaryRaw['net_cents']) ? (int) $summaryRaw['net_cents'] : 0,
-            'discount_cents'         => isset($summaryRaw['discount_cents']) ? (int) $summaryRaw['discount_cents'] : 0,
+            'gross_cents'            => isset($summaryRaw['gross_cents']) ? (int) $summaryRaw['gross_cents'] / 100 : 0,
+            'net_cents'              => isset($summaryRaw['net_cents']) ? (int) $summaryRaw['net_cents'] / 100 : 0,
+            'discount_cents'         => isset($summaryRaw['discount_cents']) ? (int) $summaryRaw['discount_cents'] / 100 : 0,
             'total_orders'           => isset($summaryRaw['total_orders']) ? (int) $summaryRaw['total_orders'] : 0,
             'completed_transactions' => isset($summaryRaw['completed_transactions']) ? (int) $summaryRaw['completed_transactions'] : 0,
         ];
