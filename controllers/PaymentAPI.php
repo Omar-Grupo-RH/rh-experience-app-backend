@@ -123,7 +123,6 @@ class PaymentAPI
             $ticket = new Ticket([
                 'trip_id'      => $payload['trip_data']['trip_id'],
                 'seat_numbers' => json_encode($payload['trip_data']['seats'], JSON_UNESCAPED_UNICODE),
-                // 'status' => 'pending' si tienes esa columna
             ]);
 
             $resTicket = $ticket->guardar();
@@ -148,8 +147,8 @@ class PaymentAPI
                 $passenger = new TicketPassenger([
                     'ticket_id'  => (int)$ticket->id,
                     'seat_id'    => $p['seat_id']    ?? '',
-                    'first_name' => $p['first_name'] ?? '',
-                    'last_name'  => $p['last_name']  ?? '',
+                    'first_name' => cleanString($p['first_name']) ?? '',
+                    'last_name'  => cleanString($p['last_name'])  ?? '',
                     'email'      => $p['email']      ?? '',
                     'phone'      => $p['phone']      ?? '',
                     'born_date'  => $p['born_date']  ?? null,
@@ -172,6 +171,7 @@ class PaymentAPI
         }
 
         // 4) Crear Buyer
+        $payload['buyer']['full_name'] = cleanString($payload['buyer']['full_name']);
         try {
             $buyer = new Buyer($payload['buyer']);
             $resBuyer = $buyer->guardar();

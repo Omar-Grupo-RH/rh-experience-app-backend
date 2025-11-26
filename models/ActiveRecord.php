@@ -254,6 +254,63 @@ class ActiveRecord
         return array_shift($resultado);
     }
 
+
+    public static function earningsWithSummary(?string $date = null, string $orden = 'DESC')
+    {
+        $orden = strtoupper($orden) === 'ASC' ? 'ASC' : 'DESC';
+
+        // mismo where para filas y resumen
+        $where = '1=1';
+
+        if ($date) {
+            $dateEscaped = self::$db->escape_string($date);
+            $where .= " AND o.created_at = '{$dateEscaped}'";
+        }
+
+        // FILAS (para la tabla)
+        $queryRows = "
+            SELECT
+                o.id,
+                b.full_name      AS buyer_name,
+                o.subtotal_cents,
+                o.discount_cents,
+                o.total_cents,
+                o.status,
+                o.created_at,
+                tr.trip_date,
+                tr.title         AS trip_title
+            FROM " . static::$tabla . " o
+            INNER JOIN buyers  b  ON o.buyer_id  = b.id
+            INNER JOIN tickets tk ON o.ticket_id = tk.id
+            INNER JOIN trips  tr  ON tk.trip_id  = tr.id
+            WHERE {$where}
+            ORDER BY o.created_at {$orden}
+        ";
+
+        $rows = self::consultarSQL($queryRows);
+
+        // RESUMEN (para los CardInfo)
+        $querySummary = "
+            SELECT
+                COALESCE(SUM(o.subtotal_cents),0)          AS gross_cents,
+                COALESCE(SUM(o.total_cents),0)             AS net_cents,
+                COALESCE(SUM(o.discount_cents),0)          AS discount_cents,
+                COUNT(*)                                   AS total_orders,
+                SUM(CASE WHEN o.status = 'pagado' THEN 1 ELSE 0 END) AS completed_transactions
+            FROM orders o
+            WHERE {$where}
+        ";
+
+        $res = self::$db->query($querySummary);
+        $summary = $res->fetch_assoc();
+
+        return [
+            'rows'    => $rows,
+            'summary' => $summary,
+        ];
+    }
+
+
     // Busqueda Where con Columna en 2 tablas
     public static function whereUnion($tablaUnion, $columna, $valor)
     {

@@ -1,6 +1,9 @@
 <?php
 
-function debuguear($variable) : string {
+use Dotenv\Util\Str;
+
+function debuguear($variable): string
+{
     echo "<pre>";
     var_dump($variable);
     echo "</pre>";
@@ -8,7 +11,8 @@ function debuguear($variable) : string {
 }
 
 // Escapa / Sanitizar el HTML
-function s($html) : string {
+function s($html): string
+{
     $s = htmlspecialchars($html);
     return $s;
 }
@@ -37,8 +41,18 @@ function pagina_actual($path): bool
 function formatearFecha($fecha)
 {
     $meses = [
-        1 => "Enero", 2 => "Febrero", 3 => "Marzo", 4 => "Abril", 5 => "Mayo", 6 => "Junio",
-        7 => "Julio", 8 => "Agosto", 9 => "Septiembre", 10 => "Octubre", 11 => "Noviembre", 12 => "Diciembre"
+        1 => "Enero",
+        2 => "Febrero",
+        3 => "Marzo",
+        4 => "Abril",
+        5 => "Mayo",
+        6 => "Junio",
+        7 => "Julio",
+        8 => "Agosto",
+        9 => "Septiembre",
+        10 => "Octubre",
+        11 => "Noviembre",
+        12 => "Diciembre"
     ];
 
     $partes = explode("-", $fecha);
@@ -47,4 +61,12 @@ function formatearFecha($fecha)
     $dia = (int)$partes[2];
 
     return "$dia de $mes de $año";
+}
+
+function cleanString($value): string
+{
+    $value = $value ?? '';
+    $value = trim($value); // Elimina espacios al inicio y final
+    $value = preg_replace('/\s+/', ' ', $value); // Reemplaza múltiples espacios por uno solo
+    return strtolower($value);
 }

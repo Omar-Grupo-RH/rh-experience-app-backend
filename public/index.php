@@ -7,7 +7,7 @@
 $allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:4321',
-    // Agrega aquí otros, p. ej. 'http://127.0.0.1:3000'
+  
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -73,6 +73,7 @@ $router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true)
 $router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
+$router->get('/api/earnings', [DashboardController::class, 'earnings'], true);
 
 //Public API
 $router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);

@@ -4,6 +4,7 @@ namespace Model;
 
 use DateTime;
 use DateTimeZone;
+
 class Order extends ActiveRecord
 {
     protected static $tabla = 'orders';
@@ -20,7 +21,21 @@ class Order extends ActiveRecord
         'created_at'
     ];
 
-    public $id, $ticket_id, $buyer_id, $coupon_id, $subtotal_cents, $discount_cents, $total_cents, $currency, $status, $created_at;
+    public $id;
+    public $ticket_id;
+    public $buyer_id;
+    public $coupon_id;
+    public $subtotal_cents;
+    public $discount_cents;
+    public $total_cents;
+    public $currency;
+    public $created_at;
+    public $status;
+
+    // Campos extra del JOIN (deben existir para que crearObjeto los llene)
+    public $buyer_name;
+    public $trip_date;
+    public $trip_title;
 
 
     public function __construct($a = [])
