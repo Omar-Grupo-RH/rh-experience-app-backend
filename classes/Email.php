@@ -8,88 +8,83 @@ use PHPMailer\PHPMailer\Exception;
 
 class Email
 {
-    public $email;
-    public $nombre;
-    public $subject;
-    public $body;
+  public $email;
+  public $nombre;
+  public $subject;
+  public $body;
 
-    private $mail;
-    private $fecha;
-    private $asientos;
-    private $tripId;
+  private $mail;
+  private $fecha;
+  private $asientos;
+  private $tripId;
 
-    public function __construct($email, $nombre, $subject, $fecha, $asientos = '', $tripId = '')
-    {
-        $this->email   = $email;
-        $this->nombre  = $nombre;
-        $this->subject = $subject;
-        $this->fecha   = $fecha;
-        $this->asientos = $asientos;
-        $this->tripId   = $tripId;
+  public function __construct($email, $nombre, $subject, $fecha, $asientos = '', $tripId = '')
+  {
+    $this->email   = $email;
+    $this->nombre  = $nombre;
+    $this->subject = $subject;
+    $this->fecha   = $fecha;
+    $this->asientos = $asientos;
+    $this->tripId   = $tripId;
 
-        // Inicializa PHPMailer y configura SMTP primero
-        $this->mail = new PHPMailer(true);
-        $this->configurarSMTP();
+    // Inicializa PHPMailer y configura SMTP primero
+    $this->mail = new PHPMailer(true);
+    $this->configurarSMTP();
 
-        
 
-        // Construye cuerpo HTML + texto plano
-        $this->body = $this->buildEmailTemplate();
-        $this->mail->Body    = $this->body;
-        $this->mail->AltBody = $this->buildPlainTextTemplate();
+
+    // Construye cuerpo HTML + texto plano
+    $this->body = $this->buildEmailTemplate();
+    $this->mail->Body    = $this->body;
+    $this->mail->AltBody = $this->buildPlainTextTemplate();
+  }
+
+  private function configurarSMTP(): void
+  {
+    try {
+      // Servidor
+      $this->mail->isSMTP();
+      $this->mail->Host       = 'smtp.gmail.com';
+      $this->mail->SMTPAuth   = true;
+      $this->mail->Username   = $_ENV['GMAIL_ACCOUNT'];
+      $this->mail->Password   = $_ENV['GMAIL_PASSWORD'];
+      $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+      $this->mail->Port       = 587;
+
+      // Orígenes y destino
+      $this->mail->setFrom($_ENV['GMAIL_ACCOUNT'], 'RH Experience');
+      $this->mail->addAddress($this->email, $this->nombre);
+
+      // Contenido
+      $this->mail->isHTML(true);
+      $this->mail->Subject = $this->subject;
+      $this->mail->CharSet = 'UTF-8';
+    } catch (Exception $e) {
+      throw new \Exception("Error configurando SMTP: " . $e->getMessage());
     }
+  }
 
-    private function configurarSMTP(): void
-    {
-        try {
-            // Servidor
-            $this->mail->isSMTP();
-            $this->mail->Host       = 'smtp.gmail.com';
-            $this->mail->SMTPAuth   = true;
-            $this->mail->Username   = $_ENV['GMAIL_ACCOUNT'];
-            $this->mail->Password   = $_ENV['GMAIL_PASSWORD']; 
-            $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $this->mail->Port       = 587;
 
-            // Orígenes y destino
-            $this->mail->setFrom($_ENV['GMAIL_ACCOUNT'], 'RH Experience');
-            $this->mail->addAddress($this->email, $this->nombre);
 
-            // Contenido
-            $this->mail->isHTML(true);
-            $this->mail->Subject = $this->subject;
-            $this->mail->CharSet = 'UTF-8';
-        } catch (Exception $e) {
-            throw new \Exception("Error configurando SMTP: " . $e->getMessage());
-        }
-    }
+  /**
+   * Construye el HTML del email (usa <img> en vez de background-image).
+   */
+  private function buildEmailTemplate(): string
+  {
+    // Escapes mínimos
+    $nombre = htmlspecialchars($this->nombre ?? '', ENT_QUOTES, 'UTF-8');
+    $fecha  = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
+    $asientos = htmlspecialchars($this->asientos ?? '', ENT_QUOTES, 'UTF-8');
+    $tripId   = htmlspecialchars($this->tripId ?? '', ENT_QUOTES, 'UTF-8');
 
-    
-
-    /**
-     * Construye el HTML del email (usa <img> en vez de background-image).
-     */
-    private function buildEmailTemplate(): string
-    {
-        // Escapes mínimos
-        $nombre = htmlspecialchars($this->nombre ?? '', ENT_QUOTES, 'UTF-8');
-        $fecha  = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
-        $asientos = htmlspecialchars($this->asientos ?? '', ENT_QUOTES, 'UTF-8');
-        $tripId   = htmlspecialchars($this->tripId ?? '', ENT_QUOTES, 'UTF-8');
-
-        $asientosHtml = $this->asientos ? "
+    $asientosHtml = $this->asientos ? "
             <div class='detail-item'>
-                <span><strong>Asientos:</strong></span><span>{$asientos}</span>
+                <span><strong>Asientos: </strong></span><span>{$asientos}</span>
             </div>" : "";
 
-        $tripIdHtml = $this->tripId ? "
-            <div class='detail-item'>
-                <span><strong>ID de reserva:</strong></span><span>#{$tripId}</span>
-            </div>" : "";
+    $year = date('Y');
 
-        $year = date('Y');
-
-        return "
+    return "
         <!DOCTYPE html>
         <html lang='es'>
         <head>
@@ -154,12 +149,12 @@ class Email
           </div>
         </body>
         </html>";
-    }
+  }
 
-    private function buildPlainTextTemplate(): string
-    {
-        $year = date('Y');
-        $text = "
+  private function buildPlainTextTemplate(): string
+  {
+    $year = date('Y');
+    $text = "
 CONFIRMACIÓN DE RESERVA - RH EXPERIENCE
 
 ¡Hola {$this->nombre}!
@@ -170,15 +165,15 @@ INFORMACIÓN DE LA RESERVA:
 - Fecha del viaje: {$this->fecha}
 ";
 
-        if ($this->asientos) {
-            $text .= "- Asientos reservados: {$this->asientos}\n";
-        }
+    if ($this->asientos) {
+      $text .= "- Asientos reservados: {$this->asientos}\n";
+    }
 
-        if ($this->tripId) {
-            $text .= "- ID de reserva: #{$this->tripId}\n";
-        }
+    if ($this->tripId) {
+      $text .= "- ID de reserva: #{$this->tripId}\n";
+    }
 
-        $text .= "
+    $text .= "
 PUNTO DE ENCUENTRO:
 Oficinas de Grupo RH
 Por favor llega 30 minutos antes de la hora de salida.
@@ -190,48 +185,48 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
 
 © {$year} RH Experience. Todos los derechos reservados.
 ";
-        return $text;
-    }
+    return $text;
+  }
 
-    public function setBody($body): self
-    {
-        $this->body = $body;
-        $this->mail->Body = $body;
-        // Mantén AltBody legible (opcional: podrías regenerar desde buildPlainTextTemplate)
-        $this->mail->AltBody = strip_tags($body);
-        return $this;
-    }
+  public function setBody($body): self
+  {
+    $this->body = $body;
+    $this->mail->Body = $body;
+    // Mantén AltBody legible (opcional: podrías regenerar desde buildPlainTextTemplate)
+    $this->mail->AltBody = strip_tags($body);
+    return $this;
+  }
 
-    public function addAttachment($path, $name = ''): self
-    {
-        try {
-            $this->mail->addAttachment($path, $name);
-        } catch (Exception $e) {
-            throw new \Exception("Error añadiendo adjunto: " . $e->getMessage());
-        }
-        return $this;
+  public function addAttachment($path, $name = ''): self
+  {
+    try {
+      $this->mail->addAttachment($path, $name);
+    } catch (Exception $e) {
+      throw new \Exception("Error añadiendo adjunto: " . $e->getMessage());
     }
+    return $this;
+  }
 
-    public function send(): bool
-    {
-        try {
-            $this->mail->send();
-            return true;
-        } catch (Exception $e) {
-            error_log("Error enviando email: " . $e->getMessage());
-            return false;
-        }
+  public function send(): bool
+  {
+    try {
+      $this->mail->send();
+      return true;
+    } catch (Exception $e) {
+      error_log("Error enviando email: " . $e->getMessage());
+      return false;
     }
+  }
 
-    public function getError(): string
-    {
-        return $this->mail->ErrorInfo;
-    }
+  public function getError(): string
+  {
+    return $this->mail->ErrorInfo;
+  }
 
-    // Envío rápido
-    public static function sendQuickEmail($to, $name, $subject, $fecha, $asientos = '', $tripId = ''): bool
-    {
-        $email = new self($to, $name, $subject, $fecha, $asientos, $tripId);
-        return $email->send();
-    }
+  // Envío rápido
+  public static function sendQuickEmail($to, $name, $subject, $fecha, $asientos = '', $tripId = ''): bool
+  {
+    $email = new self($to, $name, $subject, $fecha, $asientos, $tripId);
+    return $email->send();
+  }
 }

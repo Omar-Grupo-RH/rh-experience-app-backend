@@ -18,33 +18,22 @@ class TicketPdfService
       @mkdir($outputDir, 0775, true);
     }
 
-    $tripId       = $payload['trip_id'] ?? '';
-    $dateIso      = $payload['date'] ?? '';
-    $namePayment = $payload['tickets_name'] ?? 'rh-experience';
-    $passengers   = $payload['passengers'] ?? [];
-    $seats        = $payload['seats'] ?? [];
 
-    // Formato de fecha para mostrar (puedes usar tu formatearFecha)
-    $dateForHuman = function (string $iso) {
-      // YYYY-MM-DD -> DD/MM/YYYY rápido
-      $p = explode('-', $iso);
-      return count($p) === 3 ? "{$p[2]}/{$p[1]}/{$p[0]}" : $iso;
-    };
+    $date      = $payload['trip_data']['date'] ?? '2025-11-10';
+    $namePayment = $payload['trip_data']['tickets_name'] ?? 'rh-experience';
+    $passengers   = $payload['passengers'] ?? [];
 
     // Construimos HTML con página por pasajero
     $html = self::buildHtmlHeader("Boletos RH Experience");
     foreach ($passengers as $idx => $pax) {
-      $ticketCode = self::buildTicketCode($tripId, $dateIso, $pax['seat_id'] ?? '', $pax['email'] ?? '');
+
       $html .= self::ticketPageHtml([
-        'trip_id'      => $tripId,
-        'date_human'   => $dateForHuman($dateIso),
-        'date_iso'     => $dateIso,
+        'date'   => $date,
         'seat_id'      => $pax['seat_id'] ?? '',
         'first_name'   => $pax['first_name'] ?? '',
         'last_name'    => $pax['last_name'] ?? '',
         'email'        => $pax['email'] ?? '',
         'phone'        => $pax['phone'] ?? '',
-        'ticket_code'  => $ticketCode,
         'index'        => $idx + 1,
         'count'        => count($passengers),
       ]);
@@ -63,21 +52,11 @@ class TicketPdfService
 
 
 
-    $filename = sprintf('%s/RH-Tickets-Trip-%s-%s.pdf', rtrim($outputDir, '/'), $namePayment, date('YmdHis'));
+    $filename = sprintf('%s/RH-Tickets-%s-%s.pdf', rtrim($outputDir, '/'), $namePayment, date('YmdHis'));
     file_put_contents($filename, $dompdf->output());
 
     return $filename;
   }
-
-  private static function buildTicketCode(string $tripId, string $dateIso, string $seatId, string $email): string
-  {
-    // 18 chars: hash truncado + checksum simple
-    $raw = strtoupper(bin2hex(hash('sha256', $tripId . '|' . $dateIso . '|' . $seatId . '|' . strtolower($email) . '|' . microtime(true), true)));
-    $code = substr($raw, 0, 17);
-    $checksum = substr(strval(array_sum(array_map('ord', str_split($code))) % 10), -1);
-    return $code . $checksum;
-  }
-
 
   private static function buildHtmlHeader(string $title): string
   {
@@ -115,18 +94,14 @@ HTML;
     $html = <<<HTML
 <div class="ticket">
   <div class="header">
-    <div class="brand">RH Experience — Boleto</div>
-    
+    <div class="brand">RH Experience — Boleto - {$d['date']}</div>
   </div>
 
   <div class="row">
     <div class="col">
       <div class="title">Pasajero: {$fullName}</div>
       <div class="grid">
-        <div class="item"><div class="label">Trip ID</div><div class="value">{$d['trip_id']}</div></div>
-        <div class="item"><div class="label">Fecha</div><div class="value">{$d['date_human']}</div></div>
         <div class="item"><div class="label">Asiento</div><div class="value">{$d['seat_id']}</div></div>
-        <div class="item"><div class="label">Código de Boleto</div><div class="value">{$d['ticket_code']}</div></div>
         <div class="item"><div class="label">Email</div><div class="value">{$d['email']}</div></div>
         <div class="item"><div class="label">Teléfono</div><div class="value">{$d['phone']}</div></div>
      

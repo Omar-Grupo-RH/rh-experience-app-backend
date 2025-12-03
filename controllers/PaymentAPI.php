@@ -2,7 +2,6 @@
 
 namespace Controllers;
 
-
 use Throwable;
 use Model\TicketPassenger;
 use Model\Coupon;
@@ -13,6 +12,9 @@ use Classes\Email;
 use Classes\TicketPdfService;
 use Model\Buyer;
 use Model\Order;
+use DateTime;
+use DateTimeZone;
+use Model\Trip;
 
 class PaymentAPI
 {
@@ -208,7 +210,7 @@ class PaymentAPI
                 'discount_cents' => $discountCents,
                 'total_cents'    => $amountInCents,
                 'currency'       => strtoupper($currency),
-                'status'         => 'pending',
+                'status'         => 'pendiente',
             ]);
 
             $resOrder = $order->guardar();
@@ -253,7 +255,7 @@ class PaymentAPI
                     'coupon_id'      =>  $couponId !== null ? (string)$couponId : '',
                     'customer_email' => (string)($payload['trip_data']['tickets_email'] ?? ''),
                     'tickets_name'   => (string)($payload['trip_data']['tickets_name'] ?? ''),
-                    'date'           => (string)($payload['trip_data']['date'] ?? ''),
+                    'date' => (string)(new DateTime('now', new DateTimeZone('America/Merida')))->format('Y-m-d'),
                     'subtotal_cents' => (int)$subtotalCents,
                     'discount_cents' => (int)$discountCents,
                     'total_cents'    => (int)$amountInCents,
@@ -269,13 +271,10 @@ class PaymentAPI
             exit;
         } catch (\Throwable $e) {
             $cleanup();
-            JsonResponse::send(['success' => false, 'message' => 'Error creando PaymentIntent'], 500);
+            JsonResponse::send(['success' => false, 'message' => $e->getMessage()], 500);
             exit;
         }
 
-        // IMPORTANTE:
-        // Aquí ya NO generamos el PDF final ni mandamos boletos.
-        // Eso se hará solo cuando se confirme el pago en confirmPayment().
 
         JsonResponse::send([
             'success'           => true,
@@ -331,6 +330,18 @@ class PaymentAPI
         $ticketId = isset($pi->metadata->ticket_id) ? (int)$pi->metadata->ticket_id : null;
         $buyerId  = isset($pi->metadata->buyer_id) ? (int)$pi->metadata->buyer_id : null;
         $couponId = !empty($pi->metadata->coupon_id) ? (int)$pi->metadata->coupon_id : null;
+        $emailTo = !empty($pi->metadata->customer_email) ?
+            (string)$pi->metadata->customer_email : (!empty($pi->receipt_email) ? (string)$pi->receipt_email : null);
+
+
+        $order  = Order::find($orderId);
+        $ticket = Ticket::find($ticketId);
+        $buyer  = Buyer::find($buyerId);
+
+        $dateTrip = Trip::where('id', $ticket->trip_id);
+
+        error_log("IDs obtenidos: order_id={$orderId}, ticket_id={$ticketId}, buyer_id={$buyerId}");
+        error_log("Email del metadata: " . ($emailTo ?? 'NO ENCONTRADO'));
 
         if (!$orderId || !$ticketId || !$buyerId) {
             JsonResponse::send([
@@ -340,11 +351,19 @@ class PaymentAPI
             exit;
         }
 
-        $order  = Order::find($orderId);
-        $ticket = Ticket::find($ticketId);
-        $buyer  = Buyer::find($buyerId);
+        if (!$orderId || !$ticketId || !$buyerId) {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Faltan IDs en metadata del PaymentIntent',
+            ], 500);
+            exit;
+        }
+
 
         if (!$order || !$ticket || !$buyer) {
+            error_log("No se encontraron: order=" . ($order ? 'Sí' : 'No') .
+                ", ticket=" . ($ticket ? 'Sí' : 'No') .
+                ", buyer=" . ($buyer ? 'Sí' : 'No'));
             JsonResponse::send([
                 'success' => false,
                 'message' => 'Orden, ticket o buyer no encontrados',
@@ -353,7 +372,7 @@ class PaymentAPI
         }
 
         // Idempotencia: si ya estaba paid, no duplicamos nada
-        if ($order->status === 'paid') {
+        if ($order->status === 'pagado') {
             JsonResponse::send([
                 'success'  => true,
                 'message'  => 'La orden ya estaba pagada.',
@@ -365,8 +384,6 @@ class PaymentAPI
         // 1) Actualizar Order a paid
         $order->status            = 'pagado';
         $order->payment_intent_id = $pi->id;
-
-
         try {
             $res = $order->guardar();
             if (empty($res['resultado'])) {
@@ -378,7 +395,7 @@ class PaymentAPI
             exit;
         }
 
-        // 3) Descontar cupón solo AHORA que el pago sí se completó
+        // 2) Descontar cupón solo AHORA que el pago sí se completó
         if ($couponId) {
             try {
                 $coupon = Coupon::where('id', $couponId);
@@ -396,77 +413,113 @@ class PaymentAPI
             }
         }
 
-        // 4) Generar PDF y enviar correo de boletos (pago confirmado)
-        try {
-            // Recuperar pasajeros
-            // Ajusta esto a tu ORM real (whereArray, allByTicket, etc.)
-            $passengers = TicketPassenger::whereArray(['ticket_id' => $ticket->id]) ?? [];
+        // 3) Generar PDF y enviar correo de boletos (pago confirmado)
+        $pdfPath = null;
+        $pdfGenerated = false;
+        $emailSent = false;
 
+        try {
+            $passengers = TicketPassenger::whereAll('ticket_id', $ticket->id) ?? [];
             $seats = json_decode($ticket->seat_numbers ?? '[]', true) ?: [];
 
-            $payloadPdf = [
-                'trip_data' => [
-                    'date'          => $pi->metadata->date ?? '',
-                    'trip_id'       => $ticket->trip_id,
-                    'seats'         => $seats,
-                    'tickets_email' => $buyer->email,
-                    'tickets_name'  => $buyer->full_name ?? 'Cliente',
-                ],
-                'passengers' => array_map(function ($p) {
-                    return [
-                        'seat_id'    => $p->seat_id,
-                        'first_name' => $p->first_name,
-                        'last_name'  => $p->last_name,
-                        'email'      => $p->email,
-                        'phone'      => $p->phone,
-                        'born_date'  => $p->born_date,
-                        'allergies'  => json_decode($p->allergies ?? '[]', true),
+            // Asegura que haya email para enviar
+            if (!$emailTo) {
+                error_log('No hay email para enviar los boletos');
+            } else {
+                $payloadPdf = [
+                    'trip_data' => [
+                        'date'          => formatearFecha($dateTrip->trip_date) ?? 'No hay date',
+                        'seats'         => $seats,
+                        'tickets_email' => $emailTo ?? '',
+                        'tickets_name'  => $buyer->full_name ?? 'Cliente',
+                    ],
+                    'passengers' => [],
+                ];
+
+
+                foreach ($passengers as $p) {
+                    $allergies = json_decode($p->allergies ?? '[]', true);
+                    if (!is_array($allergies)) {
+                        $allergies = [];
+                    }
+
+                    $payloadPdf['passengers'][] = [
+                        'seat_id'    => $p->seat_id ?? '',
+                        'first_name' => $p->first_name ?? '',
+                        'last_name'  => $p->last_name ?? '',
+                        'email'      => $p->email ?? '',
+                        'phone'      => $p->phone ?? '',
+                        'born_date'  => $p->born_date ?? '',
+                        'allergies'  => $allergies,
                     ];
-                }, $passengers),
-            ];
+                }
 
-            $pdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
+                error_log("Payload para PDF: " . json_encode($payloadPdf));
 
-            $email = new Email(
-                $payloadPdf['trip_data']['tickets_email'],
-                $payloadPdf['trip_data']['tickets_name'],
-                'Tus boletos RH Experience (pago confirmado)',
-                formatearFecha($payloadPdf['trip_data']['date']),
-                implode(', ', $payloadPdf['trip_data']['seats']),
-                $payloadPdf['trip_data']['trip_id']
-            );
+                error_log('Generando PDF con datos: ' . json_encode($payloadPdf));
 
-            if ($pdfPath && file_exists($pdfPath)) {
-                $fileName = sprintf(
-                    'RH-Tickets-Trip-%s.pdf',
-                    $payloadPdf['trip_data']['tickets_name'] ?? 'X'
-                );
-                $email->addAttachment($pdfPath, $fileName);
-            }
+                // Generar PDF
+                error_log("Llamando a buildTicketsPdf...");
+                $pdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
+                error_log("Resultado de buildTicketsPdf: " . ($pdfPath ?? 'NULL'));
 
-            $email->send();
+                if ($pdfPath && file_exists($pdfPath)) {
+                    $pdfGenerated = true;
+                    error_log("PDF generado exitosamente: {$pdfPath} (" . filesize($pdfPath) . " bytes)");
+                } else {
+                    error_log("ERROR: PDF no se generó o no existe");
+                    // Verifica si hay algún error en el log de PHP
+                }
 
-            if ($pdfPath && is_file($pdfPath)) {
-                @unlink($pdfPath);
+                if ($emailTo && $pdfGenerated) {
+                    error_log("Preparando email para: {$emailTo}");
+
+                    // Enviar email con PDF adjunto
+                    $email = new Email(
+                        $emailTo,
+                        $payloadPdf['trip_data']['tickets_name'],
+                        '🎟️ Tus boletos RH Experience - Pago Confirmado',
+                        formatearFecha($dateTrip->trip_date),
+                        implode(', ', $payloadPdf['trip_data']['seats']),
+
+                    );
+
+                    $fileName = sprintf(
+                        'RH-Tickets-Trip-%s-%s.pdf',
+                        $payloadPdf['trip_data']['trip_id'],
+                        date('Ymd-His')
+                    );
+
+                    error_log("Adjuntando archivo: {$pdfPath} como {$fileName}");
+                    $email->addAttachment($pdfPath, $fileName);
+
+
+                    $emailSent = $email->send();
+
+                    if ($emailSent) {
+                        error_log("Email enviado exitosamente a: $emailTo");
+                    } else {
+                        error_log('Error al enviar email: ' . $email->getError());
+                    }
+
+                    // Limpiar archivo PDF temporal (opcional)
+                    // unlink($pdfPath);
+                } else {
+                    error_log('No se pudo generar el PDF');
+                }
             }
         } catch (\Throwable $e) {
-            error_log('Error enviando email de boletos tras pago: ' . $e->getMessage());
-            // El pago YA está registrado, así que no rompemos la respuesta al usuario
+            error_log('Error generando/enviando boletos: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         }
 
         JsonResponse::send([
             'success'  => true,
             'message'  => 'Pago confirmado y orden marcada como pagada.',
-            'order_id' => $order->id,
+            'payload_pdf'=> $payloadPdf
+
         ], 200);
     }
 
-    /**
-     * 3) CANCELAR INTENTO DE PAGO: eliminar ticket + pasajeros + order (+ buyer opcional) si el pago falla
-     * Endpoint: POST /payment/cancel
-     *
-     * Body esperado: { "order_id": X, "ticket_id": Y } (mándalos desde el front)
-     */
     public static function cancelPayment(): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -539,7 +592,6 @@ class PaymentAPI
         }
     }
 
-
     public static function getCoupon(): void
     {
         $code = $_GET['code'] ?? null;
@@ -547,29 +599,33 @@ class PaymentAPI
 
         if (!$code) {
             JsonResponse::send(['success' => false, 'message' => 'Falta codigo de descuento'], 400);
+            exit;
         }
 
         $coupon = Coupon::where('code', $code);
         if (!$coupon) {
             JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
+            exit;
         }
 
         if ($coupon->usage_limit === '0') {
             JsonResponse::send(['success' => false, 'message' => 'Ya se canjearon todos los cupones disponibles.'], 400);
+            exit;
         }
 
         if ($coupon->expiry_date < $today) {
             JsonResponse::send(['success' => false, 'message' => 'El cupon ya vencio.'], 400);
+            exit;
         }
         if ($coupon->is_active === '0') {
             JsonResponse::send(['success' => false, 'message' => 'El cupon no esta activo.'], 400);
+            exit;
         }
 
         JsonResponse::send([
             'success' => true,
             'message' => 'Cupon validado',
             'data' => $coupon,
-
         ], 200);
     }
 }
