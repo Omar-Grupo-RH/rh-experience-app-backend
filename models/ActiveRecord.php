@@ -272,6 +272,12 @@ class ActiveRecord
             SELECT
                 o.id,
                 b.full_name      AS buyer_name,
+                b.email,
+                b.phone,
+                b.address,
+                b.city,
+                b.state,
+                b.zip,
                 o.subtotal_cents,
                 o.discount_cents,
                 o.total_cents,

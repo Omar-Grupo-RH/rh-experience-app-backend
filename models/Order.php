@@ -34,6 +34,12 @@ class Order extends ActiveRecord
 
     // Campos extra del JOIN (deben existir para que crearObjeto los llene)
     public $buyer_name;
+    public $email;
+    public $phone;
+    public $address;
+    public $city;
+    public $state;
+    public $zip;
     public $trip_date;
     public $trip_title;
 

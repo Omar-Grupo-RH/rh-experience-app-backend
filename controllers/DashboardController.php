@@ -68,6 +68,12 @@ class DashboardController
             return [
                 'id'             => (int) $o->id,
                 'buyer_name'     => $o->buyer_name,
+                'email'     => $o->email,
+                'phone'     => $o->phone,
+                'address'     => $o->address,
+                'city'     => $o->city,
+                'state'     => $o->state,
+                'zip'     => $o->zip,
                 'subtotal_cents' => (int) $o->subtotal_cents / 100,
                 'discount_cents' => (int) $o->discount_cents / 100,
                 'total_cents'    => (int) $o->total_cents / 100,
@@ -89,7 +95,7 @@ class DashboardController
         JsonResponse::send([
             'success' => true,
             'data'    => [
-                'rows'    => $rows,
+                'buyers'    => $rows,
                 'summary' => $summary,
             ],
         ], 200);
