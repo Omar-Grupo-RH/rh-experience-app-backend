@@ -7,7 +7,7 @@
 $allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:4321',
-  
+
 ];
 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
@@ -60,8 +60,12 @@ $router->post('/api/login', [LoginController::class, 'login']);
 $router->post('/api/logout', [LoginController::class, 'logout']);
 $router->post('/api/client/create', [ClientController::class, 'store']);
 
+//Programador
+$router->get('/api/users', [ClientController::class, 'index'], true);
+$router->post('/api/users', [ClientController::class, 'store'], true);
+$router->post('/api/users/destroy', [ClientController::class, 'destroy'], true);
+
 // Admin
-$router->get('/api/clients', [ClientController::class, 'all'], true);
 $router->post('/api/trip/create', [TripController::class, 'store'], true);
 $router->post('/api/trip/update', [TripController::class, 'update'], true);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy'], true);

@@ -20,17 +20,17 @@ class LoginController
             $raw = file_get_contents('php://input');
             $payload = json_decode($raw, true) ?: [];
 
-            $email = trim($payload['email'] ?? '');
+            $username = trim($payload['username'] ?? '');
             $password = $payload['password'] ?? '';
 
-            if ($email === '' || $password === '') {
-                JsonResponse::send(['success' => false, 'message' => 'Email y contraseña son obligatorios'], 400);
+            if ($username === '' || $password === '') {
+                JsonResponse::send(['success' => false, 'message' => 'username y contraseña son obligatorios'], 400);
             }
 
             // Buscar usuario
-            $user = Client::where('email', $email);
+            $user = Client::where('username', $username);
             if (!$user) {
-                JsonResponse::send(['success' => false, 'message' => 'No se encontro una cuenta con este email'], 401);
+                JsonResponse::send(['success' => false, 'message' => 'No se encontro una cuenta con este usuario'], 401);
             }
 
             // Verificar password
@@ -45,13 +45,8 @@ class LoginController
 
             JsonResponse::send([
                 'token' => $accessToken,
-                'first_name'  => $user->first_name,
-                'last_name'  => $user->last_name,
-                'email' => $user->email,
-                'phone' => $user->phone,
+                'username'  => $user->username,
                 'admin' => $user->admin,
-                'born_date' => $user->born_date,
-                'allergies' => $user->allergies
             ], 200);
         }
     }

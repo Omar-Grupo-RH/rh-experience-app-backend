@@ -8,25 +8,7 @@ use Model\Comment;
 class CommentsController
 {
 
-    private static function readBody(): array
-    {
-        $payload = $_POST;
-        $isJson  = stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false;
-
-        if (empty($payload) && $isJson) {
-            $raw = file_get_contents('php://input');
-            $payload = json_decode($raw, true);
-            if (!is_array($payload)) {
-                JsonResponse::send(['success' => false, 'message' => 'JSON inválido'], 400);
-            }
-        }
-
-        // Normaliza strings
-        foreach ($payload as $k => $v) {
-            if (is_string($v)) $payload[$k] = trim($v);
-        }
-        return $payload;
-    }
+    
 
     public static function index(): void
     {

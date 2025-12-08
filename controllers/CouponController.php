@@ -81,7 +81,7 @@ class CouponController
             'success' => true,
             'message' => 'Cupon encontrado',
             'data' => $coupon,
-        ], 200); // ✅ 200 en GET
+        ], 200);
     }
 
 
@@ -141,7 +141,7 @@ class CouponController
         if (empty($result['resultado'])) {
             JsonResponse::send(['success' => false, 'message' => 'No se pudo crear el cupon'], 500);
         }
-        
+
         $coupon->id = $result['id'] ?? null;
 
         JsonResponse::send([
@@ -176,7 +176,7 @@ class CouponController
         if (!$coupon) {
             JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
         }
-
+        
         if (!empty($payload['code']) && $payload['code'] !== $coupon->code) {
             $codeExist = Coupon::where('code', $payload['code']);
             if ($codeExist && (int)$codeExist->id !== (int)$coupon->id) {

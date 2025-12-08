@@ -259,6 +259,7 @@ class PaymentAPI
                     'subtotal_cents' => (int)$subtotalCents,
                     'discount_cents' => (int)$discountCents,
                     'total_cents'    => (int)$amountInCents,
+                    'quantity' => (int)count($payload['passengers'])
                 ],
                 'receipt_email' => $payload['trip_data']['tickets_email'] ?? null,
             ], [
@@ -330,6 +331,7 @@ class PaymentAPI
         $ticketId = isset($pi->metadata->ticket_id) ? (int)$pi->metadata->ticket_id : null;
         $buyerId  = isset($pi->metadata->buyer_id) ? (int)$pi->metadata->buyer_id : null;
         $couponId = !empty($pi->metadata->coupon_id) ? (int)$pi->metadata->coupon_id : null;
+        $quantityTicketsSold = !empty($pi->metadata->quantity) ? (int)$pi->metadata->quantity : null;
         $emailTo = !empty($pi->metadata->customer_email) ?
             (string)$pi->metadata->customer_email : (!empty($pi->receipt_email) ? (string)$pi->receipt_email : null);
 
@@ -413,7 +415,26 @@ class PaymentAPI
             }
         }
 
-        // 3) Generar PDF y enviar correo de boletos (pago confirmado)
+
+        // 3) Descontar el total_seats
+        if ($order->status === 'pagado') {
+            try {
+                $trip = Trip::where('id', $ticket->trip_id);
+                if ($trip) {
+                    if (!is_null($trip->total_seats)) {
+                        $trip->total_seats = max(0, ((int)$trip->total_seats) - $quantityTicketsSold);
+                        if ((int)$trip->total_seats === 0) {
+                            $trip->total_seats = 0;
+                        }
+                    }
+                    $trip->guardar();
+                }
+            } catch (\Throwable $e) {
+                error_log('Error actualizando total seats tras pago: ' . $e->getMessage());
+            }
+        }
+
+        // 4) Generar PDF y enviar correo de boletos (pago confirmado)
         $pdfPath = null;
         $pdfGenerated = false;
         $emailSent = false;
@@ -515,7 +536,7 @@ class PaymentAPI
         JsonResponse::send([
             'success'  => true,
             'message'  => 'Pago confirmado y orden marcada como pagada.',
-            'payload_pdf'=> $payloadPdf
+            'payload_pdf' => $payloadPdf
 
         ], 200);
     }

@@ -29,35 +29,18 @@ class TripController
         }
         return $payload;
     }
-    
+
     public static function index()
     {
         $trips = Trip::all(); // Traer todos los viajes
         $response = [];
 
-        foreach ($trips as $trip) {
-            // Traer todos los tickets relacionados con este viaje
-            $tickets = Ticket::whereAll('trip_id', $trip->id);
-            // Contar el total de asientos ocupados
-            $unavaibleSeats = 0;
-            foreach ($tickets as $ticket) {
-                $seatNumbersArray = json_decode($ticket->seat_numbers, true) ?? [];
-                $unavaibleSeats += count($seatNumbersArray);
-            }
-            // Generar respuesta limpia para cada viaje
-            $response[] = [
-                'id'              => (int) $trip->id,
-                'title'           => $trip->title,
-                'trip_date'       => $trip->trip_date,
-                'total_seats'     => (int) $trip->total_seats,
-                'unavaible_seats' => $unavaibleSeats, // total de asientos ocupados
-            ];
-        }
+
 
         // Enviar respuesta JSON
         JsonResponse::send([
             'success' => true,
-            'data'    => $response,
+            'data'    => $trips,
         ], 200);
     }
 
@@ -82,7 +65,7 @@ class TripController
 
         foreach ($ticketsByTrip as $ticket) {
             $seatNumbersArray = json_decode($ticket->seat_numbers, true) ?? [];
-            $unavaibleSeats += count($seatNumbersArray);
+
             $seatsLocation = array_merge($seatsLocation, $seatNumbersArray);
         }
 
@@ -93,14 +76,10 @@ class TripController
                 'title'           => $trip->title,
                 'trip_date'       => $trip->trip_date,
                 'total_seats'     => (int) $trip->total_seats,
-                'avaible_seats'   => (int) $trip->avaible_seats,
-                'unavaible_seats' => $unavaibleSeats,
                 'seats_location'  => $seatsLocation, // array con posiciones ocupadas
             ],
         ], 200);
     }
-
-
 
     public static function store()
     {
