@@ -10,7 +10,6 @@ class Client extends ActiveRecord
         'username',
         'password',
         'admin',
-
     ];
 
     public $id;
