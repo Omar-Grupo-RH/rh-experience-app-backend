@@ -12,34 +12,22 @@ class Order extends ActiveRecord
         'id',
         'ticket_id',
         'buyer_id',
-        'coupon_id',
-        'subtotal_cents',
-        'discount_cents',
-        'total_cents',
-        'currency',
-        'status',
         'created_at'
     ];
 
     public $id;
     public $ticket_id;
     public $buyer_id;
-    public $coupon_id;
-    public $subtotal_cents;
-    public $discount_cents;
-    public $total_cents;
-    public $currency;
     public $created_at;
-    public $status;
 
     // Campos extra del JOIN (deben existir para que crearObjeto los llene)
     public $buyer_name;
     public $email;
     public $phone;
-    public $address;
     public $city;
-    public $state;
-    public $zip;
+    public $is_client;
+    public $advisor_name;
+    public $is_first_visit;
     public $trip_date;
     public $trip_title;
 
@@ -49,12 +37,6 @@ class Order extends ActiveRecord
         $this->id = $a['id'] ?? null;
         $this->ticket_id = $a['ticket_id'] ?? null;
         $this->buyer_id  = $a['buyer_id'] ?? null;
-        $this->coupon_id = $a['coupon_id'] ?? null;
-        $this->subtotal_cents = (int)($a['subtotal_cents'] ?? 0);
-        $this->discount_cents = (int)($a['discount_cents'] ?? 0);
-        $this->total_cents    = (int)($a['total_cents'] ?? 0);
-        $this->currency = $a['currency'] ?? 'MXN';
-        $this->status   = $a['status'] ?? '';
         $this->created_at = $a['created_at'] ?? $this->nowDateMerida();
     }
 

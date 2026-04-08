@@ -44,11 +44,10 @@ require_once __DIR__ . '/../includes/app.php';
 
 use Controllers\ClientController;
 use Controllers\CommentsController;
-use Controllers\LoginController;
-use Controllers\TripController;
-use Controllers\CouponController;
 use Controllers\DashboardController;
-use Controllers\PaymentAPI;
+use Controllers\LoginController;
+use Controllers\ReservationController;
+use Controllers\TripController;
 use MVC\Router;
 
 $router = new Router();
@@ -70,25 +69,30 @@ $router->post('/api/trip/create', [TripController::class, 'store'], true);
 $router->post('/api/trip/update', [TripController::class, 'update'], true);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy'], true);
 
-$router->get('/api/coupon', [CouponController::class, 'show'], true);
-$router->post('/api/coupon', [CouponController::class, 'store'], true);
-$router->post('/api/coupon/update', [CouponController::class, 'update'], true);
-$router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true);
+// $router->get('/api/coupon', [CouponController::class, 'show'], true);
+// $router->post('/api/coupon', [CouponController::class, 'store'], true);
+// $router->post('/api/coupon/update', [CouponController::class, 'update'], true);
+// $router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true);
+
 $router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
-$router->get('/api/earnings', [DashboardController::class, 'earnings'], true);
+
+// $router->get('/api/earnings', [DashboardController::class, 'earnings'], true);
+//$router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
 
 //Public API
-$router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
 $router->get('/api/trip', [TripController::class, 'show']);
 $router->get('/api/trips', [TripController::class, 'index']);
 $router->post('/api/comments/create', [CommentsController::class, 'store']);
 $router->get('/api/comments', [CommentsController::class, 'index']);
-$router->get('/api/coupons', [CouponController::class, 'index']);
-$router->post('/api/payment',          [PaymentAPI::class, 'paymentIntent']);
-$router->post('/api/payment/confirm',  [PaymentAPI::class, 'confirmPayment']);
-$router->post('/api/payment/cancel',   [PaymentAPI::class, 'cancelPayment']);
+
+$router->post('/api/reservation', [ReservationController::class, 'store']);
+
+//$router->get('/api/coupons', [CouponController::class, 'index']);
+//$router->post('/api/payment',          [PaymentAPI::class, 'paymentIntent']);
+//$router->post('/api/payment/confirm',  [PaymentAPI::class, 'confirmPayment']);
+//$router->post('/api/payment/cancel',   [PaymentAPI::class, 'cancelPayment']);
 
 
 // $router->post('/api/testPayment', [PaymentAPI::class, 'paymentTest']);

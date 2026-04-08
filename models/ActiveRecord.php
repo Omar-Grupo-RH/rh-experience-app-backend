@@ -19,6 +19,11 @@ class ActiveRecord
         self::$db = $database;
     }
 
+    public static function getDB()
+    {
+        return self::$db;
+    }
+
     // Setear un tipo de Alerta
     public static function setAlerta($tipo, $mensaje)
     {

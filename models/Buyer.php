@@ -13,24 +13,22 @@ class Buyer extends ActiveRecord
         'full_name',
         'email',
         'phone',
-        'address',
         'city',
-        'state',
-        'zip',
-        'country',
-        'created_at'
+        'created_at',
+        'is_client',
+        'advisor_name',
+        'is_first_visit'
     ];
 
     public $id;
     public $full_name;
     public $email;
     public $phone;
-    public $address;
     public $city;
-    public $state;
-    public $zip;
-    public $country;
     public $created_at;
+    public $is_client;
+    public $advisor_name;
+    public $is_first_visit;
 
     public function __construct($args = [])
     {
@@ -38,12 +36,11 @@ class Buyer extends ActiveRecord
         $this->full_name  = trim($args['full_name'] ?? '');
         $this->email      = trim($args['email'] ?? '');
         $this->phone      = trim($args['phone'] ?? '');
-        $this->address    = trim($args['address'] ?? '');
         $this->city       = trim($args['city'] ?? '');
-        $this->state      = trim($args['state'] ?? '');
-        $this->zip        = trim($args['zip'] ?? '');
-        $this->country    = trim($args['country'] ?? 'MX');
         $this->created_at = $args['created_at'] ?? $this->nowDateMerida();
+        $this->is_client  = $args['is_client'] ?? false;
+        $this->advisor_name = trim($args['advisor_name'] ?? '');
+        $this->is_first_visit = $args['is_first_visit'] ?? false;
     }
 
     /** Fecha local Mérida (DATE) */
