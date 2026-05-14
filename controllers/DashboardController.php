@@ -21,30 +21,34 @@ class DashboardController
 
     public static function getPassengersByTravel()
     {
-
         $id = $_GET['id'] ?? null;
+
         if (!$id) {
-            JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
-            exit;
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Falta id'
+            ], 400);
+            return;
         }
 
-        $trip = Trip::find($id);
+        $trip = Trip::find((int) $id);
+
         if (!$trip) {
-            JsonResponse::send(['success' => false, 'message' => 'RH EXPERIENCE no encontrado'], 404);
-            exit;
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'RH EXPERIENCE no encontrado'
+            ], 404);
+            return;
         }
 
-
-        $res = $passengers = TripPassenger::allPassengersByTrip($id);
-        if (!$res) {
-            JsonResponse::send(['success' => false, 'message' => 'No se encontraron pasajeros'], 404);
-            exit;
-        }
+        $passengers = TripPassenger::allPassengersWithRegistrationByTrip((int) $id);
 
         JsonResponse::send([
             'success' => true,
-            'data'    => $passengers,
+            'data' => $passengers,
         ], 200);
+
+        return;
     }
 
     public static function earnings()

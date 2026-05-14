@@ -12,6 +12,7 @@ class ReservationRegistration extends ActiveRecord
     protected static $columnasDB = [
         'id',
         'ticket_id',
+        'ticket_passenger_id',
         'registration_type',
         'area_code',
         'alliance_name',
@@ -29,6 +30,7 @@ class ReservationRegistration extends ActiveRecord
 
     public ?int $id;
     public ?int $ticket_id;
+    public ?int $ticket_passenger_id;
 
     public string $registration_type;
 
@@ -49,7 +51,14 @@ class ReservationRegistration extends ActiveRecord
     public function __construct($args = [])
     {
         $this->id = $args['id'] ?? null;
-        $this->ticket_id = isset($args['ticket_id']) ? (int) $args['ticket_id'] : null;
+
+        $this->ticket_id = isset($args['ticket_id'])
+            ? (int) $args['ticket_id']
+            : null;
+
+        $this->ticket_passenger_id = isset($args['ticket_passenger_id'])
+            ? (int) $args['ticket_passenger_id']
+            : null;
 
         $this->registration_type = trim($args['registration_type'] ?? '');
 
@@ -72,7 +81,7 @@ class ReservationRegistration extends ActiveRecord
         $this->created_at = $args['created_at'] ?? $this->nowDateMerida();
     }
 
-    private function cleanNullable($value ): ?string
+    private function cleanNullable($value): ?string
     {
         if ($value === null) return null;
 
@@ -95,6 +104,10 @@ class ReservationRegistration extends ActiveRecord
 
         if (!$this->ticket_id) {
             $errores[] = 'El ticket es obligatorio.';
+        }
+
+        if (!$this->ticket_passenger_id) {
+            $errores[] = 'El pasajero es obligatorio.';
         }
 
         if (!$this->registration_type || !in_array($this->registration_type, $allowedTypes, true)) {

@@ -4,51 +4,172 @@ namespace Model;
 
 class TripPassenger extends ActiveRecord
 {
-    protected static $tabla = 'trips'; 
+    protected static $tabla = 'ticket_passengers';
+
     protected static $columnasDB = [
-        'passenger_id',
+        'id',
+        'ticket_id',
+        'trip_id',
+        'seat_id',
         'first_name',
         'last_name',
         'email',
         'phone',
         'born_date',
-        'seat_id',
         'allergies',
         'created_at',
-        'ticket_id',
-        'seat_numbers',
+
+        'registration_id',
+        'registration_type',
+        'area_code',
+        'alliance_name',
+        'alliance_code',
+        'prize_code',
+        'development',
+        'stage',
+        'lot_number',
+        'advisor_name',
+        'advisor_code',
+        'origin',
+        'origin_alliance_name',
+        'registration_created_at',
+
         'trip_date',
-        'title'
+        'title',
     ];
 
-    public $passenger_id;
+    public $id;
+    public $ticket_id;
+    public $trip_id;
+    public $seat_id;
     public $first_name;
     public $last_name;
     public $email;
     public $phone;
     public $born_date;
-    public $seat_id;
     public $allergies;
     public $created_at;
-    public $ticket_id;
-    public $seat_numbers;
+
+    public $registration_id;
+    public $registration_type;
+    public $area_code;
+    public $alliance_name;
+    public $alliance_code;
+    public $prize_code;
+    public $development;
+    public $stage;
+    public $lot_number;
+    public $advisor_name;
+    public $advisor_code;
+    public $origin;
+    public $origin_alliance_name;
+    public $registration_created_at;
+
     public $trip_date;
     public $title;
 
     public function __construct($args = [])
     {
-        $this->passenger_id = $args['passenger_id'] ?? null;
-        $this->first_name   = $args['first_name'] ?? '';
-        $this->last_name    = $args['last_name'] ?? '';
-        $this->email        = $args['email'] ?? '';
-        $this->phone        = $args['phone'] ?? '';
-        $this->born_date    = $args['born_date'] ?? null;
-        $this->seat_id      = $args['seat_id'] ?? '';
-        $this->allergies    = $args['allergies'] ?? '[]';
-        $this->created_at   = $args['created_at'] ?? null;
-        $this->ticket_id    = $args['ticket_id'] ?? null;
-        $this->seat_numbers = $args['seat_numbers'] ?? '';
-        $this->trip_date    = $args['trip_date'] ?? null;
-        $this->title        = $args['title'] ?? '';
+        $this->id = $args['id'] ?? null;
+        $this->ticket_id = $args['ticket_id'] ?? null;
+        $this->trip_id = $args['trip_id'] ?? null;
+        $this->seat_id = $args['seat_id'] ?? '';
+
+        $this->first_name = $args['first_name'] ?? '';
+        $this->last_name = $args['last_name'] ?? '';
+        $this->email = $args['email'] ?? '';
+        $this->phone = $args['phone'] ?? '';
+        $this->born_date = $args['born_date'] ?? null;
+        $this->allergies = $args['allergies'] ?? '[]';
+        $this->created_at = $args['created_at'] ?? null;
+
+        $this->registration_id = $args['registration_id'] ?? null;
+        $this->registration_type = $args['registration_type'] ?? null;
+        $this->area_code = $args['area_code'] ?? null;
+        $this->alliance_name = $args['alliance_name'] ?? null;
+        $this->alliance_code = $args['alliance_code'] ?? null;
+        $this->prize_code = $args['prize_code'] ?? null;
+        $this->development = $args['development'] ?? null;
+        $this->stage = $args['stage'] ?? null;
+        $this->lot_number = $args['lot_number'] ?? null;
+        $this->advisor_name = $args['advisor_name'] ?? null;
+        $this->advisor_code = $args['advisor_code'] ?? null;
+        $this->origin = $args['origin'] ?? null;
+        $this->origin_alliance_name = $args['origin_alliance_name'] ?? null;
+        $this->registration_created_at = $args['registration_created_at'] ?? null;
+
+        $this->trip_date = $args['trip_date'] ?? null;
+        $this->title = $args['title'] ?? '';
+    }
+
+    public static function allPassengersWithRegistrationByTrip($tripId): array
+    {
+        $db = self::getDB();
+
+        $query = "
+            SELECT 
+                tp.id,
+                tp.ticket_id,
+                tp.trip_id,
+                tp.seat_id,
+                tp.first_name,
+                tp.last_name,
+                tp.email,
+                tp.phone,
+                tp.born_date,
+                tp.allergies,
+                tp.created_at,
+
+                rr.id AS registration_id,
+                rr.registration_type,
+                rr.area_code,
+                rr.alliance_name,
+                rr.alliance_code,
+                rr.prize_code,
+                rr.development,
+                rr.stage,
+                rr.lot_number,
+                rr.advisor_name,
+                rr.advisor_code,
+                rr.origin,
+                rr.origin_alliance_name,
+                rr.created_at AS registration_created_at,
+
+                t.trip_date,
+                t.title
+
+            FROM ticket_passengers tp
+
+            LEFT JOIN reservation_registrations rr
+                ON rr.ticket_passenger_id = tp.id
+
+            LEFT JOIN trips t
+                ON t.id = tp.trip_id
+
+            WHERE tp.trip_id = ?
+
+            ORDER BY tp.seat_id ASC
+        ";
+
+        $stmt = $db->prepare($query);
+
+        if (!$stmt) {
+            throw new \Exception('Error preparando consulta: ' . $db->error);
+        }
+
+        $tripId = (int) $tripId;
+
+        $stmt->bind_param('i', $tripId);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+
+        $passengers = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $passengers[] = $row;
+        }
+
+        return $passengers;
     }
 }

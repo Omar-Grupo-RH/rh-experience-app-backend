@@ -31,7 +31,10 @@ class ReservationController
 
             $idempotencyKey = self::getIdempotencyKey($payload);
             $normalizedPayload = self::normalizePayloadForHash($payload);
-            $payloadHash = hash('sha256', json_encode($normalizedPayload, JSON_UNESCAPED_UNICODE));
+            $payloadHash = hash(
+                'sha256',
+                json_encode($normalizedPayload, JSON_UNESCAPED_UNICODE)
+            );
 
             $tripId = (int) $payload['trip_data']['trip_id'];
             $seats = self::normalizeSeats($payload['trip_data']['seats']);
@@ -47,7 +50,11 @@ class ReservationController
 
             $db->begin_transaction();
 
-            $idem = self::lockIdempotencyKey($db, $idempotencyKey, $payloadHash);
+            $idem = self::lockIdempotencyKey(
+                $db,
+                $idempotencyKey,
+                $payloadHash
+            );
 
             if ($idem['status'] === 'completed') {
                 $db->commit();
@@ -89,12 +96,6 @@ class ReservationController
 
             $ticket->id = (int) $resTicket['id'];
 
-            /**
-             * Guardar datos de RegistrationType
-             * Se relaciona con ticket_id porque aplica a toda la reservación.
-             */
-            self::saveReservationRegistration($ticket->id, $payload['RegistrationType'] ?? null);
-
             foreach ($payload['passengers'] as $index => $p) {
                 $seatId = $seats[$index];
 
@@ -115,6 +116,14 @@ class ReservationController
                 if (empty($resP['resultado'])) {
                     throw new \Exception('No se pudo registrar uno de los pasajeros.');
                 }
+
+                $passengerId = (int) $resP['id'];
+
+                self::saveReservationRegistration(
+                    $ticket->id,
+                    $passengerId,
+                    $payload['RegistrationType'] ?? null
+                );
             }
 
             $order = new Order([
@@ -133,7 +142,12 @@ class ReservationController
                 'ticket_id' => $ticket->id
             ];
 
-            self::completeIdempotencyKey($db, $idempotencyKey, $ticket->id, $response);
+            self::completeIdempotencyKey(
+                $db,
+                $idempotencyKey,
+                $ticket->id,
+                $response
+            );
 
             $db->commit();
 
@@ -210,6 +224,14 @@ class ReservationController
 
         if (empty($payload['trip_data']['seats']) || !is_array($payload['trip_data']['seats'])) {
             throw new \InvalidArgumentException('Debes seleccionar al menos un asiento.');
+        }
+
+        if (empty($payload['RegistrationType']) || !is_array($payload['RegistrationType'])) {
+            throw new \InvalidArgumentException('Faltan los datos del tipo de registro.');
+        }
+
+        if (empty($payload['RegistrationType']['registration_type'])) {
+            throw new \InvalidArgumentException('El tipo de registro es obligatorio.');
         }
 
         if (empty($payload['passengers']) || !is_array($payload['passengers'])) {
@@ -299,8 +321,11 @@ class ReservationController
         return $payload;
     }
 
-    private static function lockIdempotencyKey(\mysqli $db, string $key, string $payloadHash): array
-    {
+    private static function lockIdempotencyKey(
+        \mysqli $db,
+        string $key,
+        string $payloadHash
+    ): array {
         $stmt = $db->prepare("
             INSERT INTO reservation_idempotency 
                 (idempotency_key, payload_hash, status, created_at, updated_at)
@@ -333,8 +358,12 @@ class ReservationController
         return $row;
     }
 
-    private static function completeIdempotencyKey(\mysqli $db, string $key, int $ticketId, array $response): void
-    {
+    private static function completeIdempotencyKey(
+        \mysqli $db,
+        string $key,
+        int $ticketId,
+        array $response
+    ): void {
         $responseJson = json_encode($response, JSON_UNESCAPED_UNICODE);
 
         $stmt = $db->prepare("
@@ -350,8 +379,11 @@ class ReservationController
         $stmt->execute();
     }
 
-    private static function decreaseAvailableSeats(\mysqli $db, int $tripId, int $numPassengers): void
-    {
+    private static function decreaseAvailableSeats(
+        \mysqli $db,
+        int $tripId,
+        int $numPassengers
+    ): void {
         $stmt = $db->prepare("
             UPDATE trips
             SET total_seats = total_seats - ?
@@ -364,6 +396,51 @@ class ReservationController
 
         if ($stmt->affected_rows === 0) {
             throw new \InvalidArgumentException('Lo sentimos, ya no hay asientos disponibles para este viaje.');
+        }
+    }
+
+    private static function saveReservationRegistration(
+        int $ticketId,
+        int $ticketPassengerId,
+        ?array $registrationPayload
+    ): void {
+        if (!$registrationPayload || !is_array($registrationPayload)) {
+            throw new \InvalidArgumentException('Faltan los datos del tipo de registro.');
+        }
+
+        $registration = new ReservationRegistration([
+            'ticket_id' => $ticketId,
+            'ticket_passenger_id' => $ticketPassengerId,
+
+            'registration_type' => $registrationPayload['registration_type'] ?? '',
+
+            'area_code' => $registrationPayload['area_code'] ?? null,
+
+            'alliance_name' => $registrationPayload['alliance_name'] ?? null,
+            'alliance_code' => $registrationPayload['alliance_code'] ?? null,
+
+            'prize_code' => $registrationPayload['prize_code'] ?? null,
+
+            'development' => $registrationPayload['development'] ?? null,
+            'stage' => $registrationPayload['stage'] ?? null,
+            'lot_number' => $registrationPayload['lot_number'] ?? null,
+
+            'advisor_name' => $registrationPayload['advisor_name'] ?? null,
+            'advisor_code' => $registrationPayload['advisor_code'] ?? null,
+            'origin' => $registrationPayload['origin'] ?? null,
+            'origin_alliance_name' => $registrationPayload['origin_alliance_name'] ?? null,
+        ]);
+
+        $errors = $registration->validar();
+
+        if (!empty($errors)) {
+            throw new \InvalidArgumentException(implode(' ', $errors));
+        }
+
+        $result = $registration->guardar();
+
+        if (empty($result['resultado'])) {
+            throw new \Exception('No se pudo guardar el tipo de registro.');
         }
     }
 
@@ -403,8 +480,8 @@ class ReservationController
             $payloadPdf = [
                 'trip_data' => [
                     'trip_id' => $payload['trip_data']['trip_id'],
-                    'date'    => $payload['trip_data']['date'] ?? '',
-                    'seats'   => $seatNumbers,
+                    'date' => $payload['trip_data']['date'] ?? '',
+                    'seats' => $seatNumbers,
                     'tickets_name' => $ticketsName
                 ],
                 'passengers' => $payload['passengers']
@@ -426,47 +503,6 @@ class ReservationController
             }
         } catch (\Throwable $e) {
             error_log('Error enviando email post-reserva: ' . $e->getMessage());
-        }
-    }
-
-    private static function saveReservationRegistration(int $ticketId, ?array $registrationPayload): void
-    {
-        if (!$registrationPayload || !is_array($registrationPayload)) {
-            throw new \InvalidArgumentException('Faltan los datos del tipo de registro.');
-        }
-
-        $registration = new ReservationRegistration([
-            'ticket_id' => $ticketId,
-
-            'registration_type' => $registrationPayload['registration_type'] ?? '',
-
-            'area_code' => $registrationPayload['area_code'] ?? null,
-
-            'alliance_name' => $registrationPayload['alliance_name'] ?? null,
-            'alliance_code' => $registrationPayload['alliance_code'] ?? null,
-
-            'prize_code' => $registrationPayload['prize_code'] ?? null,
-
-            'development' => $registrationPayload['development'] ?? null,
-            'stage' => $registrationPayload['stage'] ?? null,
-            'lot_number' => $registrationPayload['lot_number'] ?? null,
-
-            'advisor_name' => $registrationPayload['advisor_name'] ?? null,
-            'advisor_code' => $registrationPayload['advisor_code'] ?? null,
-            'origin' => $registrationPayload['origin'] ?? null,
-            'origin_alliance_name' => $registrationPayload['origin_alliance_name'] ?? null,
-        ]);
-
-        $errors = $registration->validar();
-
-        if (!empty($errors)) {
-            throw new \InvalidArgumentException(implode(' ', $errors));
-        }
-
-        $result = $registration->guardar();
-
-        if (empty($result['resultado'])) {
-            throw new \Exception('No se pudo guardar el tipo de registro.');
         }
     }
 }
