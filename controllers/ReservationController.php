@@ -9,6 +9,7 @@ use Model\ActiveRecord;
 use Model\Order;
 use Model\Ticket;
 use Model\TicketPassenger;
+use Model\ReservationRegistration;
 
 class ReservationController
 {
@@ -87,6 +88,12 @@ class ReservationController
             }
 
             $ticket->id = (int) $resTicket['id'];
+
+            /**
+             * Guardar datos de RegistrationType
+             * Se relaciona con ticket_id porque aplica a toda la reservación.
+             */
+            self::saveReservationRegistration($ticket->id, $payload['RegistrationType'] ?? null);
 
             foreach ($payload['passengers'] as $index => $p) {
                 $seatId = $seats[$index];
@@ -419,6 +426,47 @@ class ReservationController
             }
         } catch (\Throwable $e) {
             error_log('Error enviando email post-reserva: ' . $e->getMessage());
+        }
+    }
+
+    private static function saveReservationRegistration(int $ticketId, ?array $registrationPayload): void
+    {
+        if (!$registrationPayload || !is_array($registrationPayload)) {
+            throw new \InvalidArgumentException('Faltan los datos del tipo de registro.');
+        }
+
+        $registration = new ReservationRegistration([
+            'ticket_id' => $ticketId,
+
+            'registration_type' => $registrationPayload['registration_type'] ?? '',
+
+            'area_code' => $registrationPayload['area_code'] ?? null,
+
+            'alliance_name' => $registrationPayload['alliance_name'] ?? null,
+            'alliance_code' => $registrationPayload['alliance_code'] ?? null,
+
+            'prize_code' => $registrationPayload['prize_code'] ?? null,
+
+            'development' => $registrationPayload['development'] ?? null,
+            'stage' => $registrationPayload['stage'] ?? null,
+            'lot_number' => $registrationPayload['lot_number'] ?? null,
+
+            'advisor_name' => $registrationPayload['advisor_name'] ?? null,
+            'advisor_code' => $registrationPayload['advisor_code'] ?? null,
+            'origin' => $registrationPayload['origin'] ?? null,
+            'origin_alliance_name' => $registrationPayload['origin_alliance_name'] ?? null,
+        ]);
+
+        $errors = $registration->validar();
+
+        if (!empty($errors)) {
+            throw new \InvalidArgumentException(implode(' ', $errors));
+        }
+
+        $result = $registration->guardar();
+
+        if (empty($result['resultado'])) {
+            throw new \Exception('No se pudo guardar el tipo de registro.');
         }
     }
 }
