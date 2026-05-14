@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../includes/app.php';
 
 use Controllers\ClientController;
+use Controllers\CodesController;
 use Controllers\CommentsController;
 use Controllers\DashboardController;
 use Controllers\LoginController;
@@ -79,8 +80,6 @@ $router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
 
-// $router->get('/api/earnings', [DashboardController::class, 'earnings'], true);
-//$router->get('/api/payment/coupon', [PaymentAPI::class, 'getCoupon']);
 
 //Public API
 $router->get('/api/trip', [TripController::class, 'show']);
@@ -90,12 +89,11 @@ $router->get('/api/comments', [CommentsController::class, 'index']);
 
 $router->post('/api/reservation', [ReservationController::class, 'store']);
 
-//$router->get('/api/coupons', [CouponController::class, 'index']);
-//$router->post('/api/payment',          [PaymentAPI::class, 'paymentIntent']);
-//$router->post('/api/payment/confirm',  [PaymentAPI::class, 'confirmPayment']);
-//$router->post('/api/payment/cancel',   [PaymentAPI::class, 'cancelPayment']);
-
-
-// $router->post('/api/testPayment', [PaymentAPI::class, 'paymentTest']);
+$router->get('/api/codes', [CodesController::class, 'index']);
+$router->get('/api/code', [CodesController::class, 'show']);
+$router->post('/api/codes', [CodesController::class, 'store']);
+$router->post('/api/codes/update', [CodesController::class, 'update']);
+$router->post('/api/codes/destroy', [CodesController::class, 'delete']);
+$router->get('/api/codes/validate', [CodesController::class, 'validate']);
 
 $router->comprobarRutas();
