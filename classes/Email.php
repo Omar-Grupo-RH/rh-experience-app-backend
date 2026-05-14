@@ -3,22 +3,22 @@
 namespace Classes;
 
 use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
+//use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 class Email
 {
-  public $email;
-  public $nombre;
-  public $subject;
-  public $body;
+  public string $email;
+  public string $nombre;
+  public string $subject;
+  public string $body;
 
-  private $mail;
-  private $fecha;
-  private $asientos;
-  private $tripId;
+  private PHPMailer $mail;
+  private string $fecha;
+  private string $asientos;
+  private string $tripId;
 
-  public function __construct($email, $nombre, $subject, $fecha, $asientos = '', $tripId = '')
+  public function __construct(string $email, string $nombre, string $subject, string $fecha, string $asientos = '', string $tripId = '')
   {
     $this->email   = $email;
     $this->nombre  = $nombre;
@@ -125,7 +125,7 @@ class Email
                 <h3>📋 Detalles de la Reserva</h3>
                 <div class='detail-item'><span><strong>Fecha del viaje:</strong></span><span>{$fecha}</span></div>
                 {$asientosHtml}
-                {$tripIdHtml}
+         
               </div>
 
               <div class='info-box'>

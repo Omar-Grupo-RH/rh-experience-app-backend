@@ -4,6 +4,7 @@ namespace Controllers;
 
 use App\Http\JsonResponse;
 use Model\Comment;
+use Throwable;
 
 class CommentsController
 {
@@ -59,8 +60,6 @@ class CommentsController
             ], 201);
         }
     }
-
-
     public static function update(): void
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {

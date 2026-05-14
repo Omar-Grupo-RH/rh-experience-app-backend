@@ -10,9 +10,11 @@ class Client extends ActiveRecord
         'username',
         'password',
         'admin',
+        'full_name'
     ];
 
     public $id;
+    public $full_name;
     public $username;
     public $password;
     public $admin;
@@ -26,6 +28,7 @@ class Client extends ActiveRecord
     public function __construct($args = [])
     {
         $this->id               = $args['id'] ?? null;
+        $this->full_name        = trim($args['full_name'] ?? '');
         $this->username       = trim($args['username'] ?? '');
         $this->password         = $args['password'] ?? '';
         $this->admin            = (int)($args['admin'] ?? 0);

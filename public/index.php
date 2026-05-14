@@ -23,7 +23,7 @@ if ($isAllowed) {
 header('Vary: Origin');
 
 // Headers comunes
-header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With,Idempotency-Key');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Access-Control-Max-Age: 86400');
 
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         header("Access-Control-Allow-Origin: {$origin}");
         header('Access-Control-Allow-Credentials: true');
     }
-    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With,Idempotency-Key');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     http_response_code(204);
     exit;
@@ -62,6 +62,7 @@ $router->post('/api/client/create', [ClientController::class, 'store']);
 //Programador
 $router->get('/api/users', [ClientController::class, 'index'], true);
 $router->post('/api/users', [ClientController::class, 'store'], true);
+$router->post('/api/users/update', [ClientController::class, 'update'], true);
 $router->post('/api/users/destroy', [ClientController::class, 'destroy'], true);
 
 // Admin

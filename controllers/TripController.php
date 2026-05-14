@@ -204,14 +204,16 @@ class TripController
             $trip = Trip::find($id);
         } catch (\Throwable $e) {
             JsonResponse::send(['success' => false, 'message' => 'Error al buscar el evento'], 500);
+            return;
         }
 
         if (!$trip) {
             JsonResponse::send(['success' => false, 'message' => 'Evento no encontrado'], 404);
+            return;
         }
 
         try {
-            $ok = $trip->eliminar();               // 👈 tu método de modelo que hace DELETE
+            $ok = $trip->eliminar();       
         } catch (\Throwable $e) {
             JsonResponse::send(['success' => false, 'message' => 'Error al eliminar el evento'], 500);
         }

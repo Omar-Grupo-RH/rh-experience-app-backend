@@ -176,7 +176,7 @@ class CouponController
         if (!$coupon) {
             JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
         }
-        
+
         if (!empty($payload['code']) && $payload['code'] !== $coupon->code) {
             $codeExist = Coupon::where('code', $payload['code']);
             if ($codeExist && (int)$codeExist->id !== (int)$coupon->id) {
@@ -239,26 +239,31 @@ class CouponController
 
         if (!$id) {
             JsonResponse::send(['success' => false, 'message' => 'Falta id del cupon'], 400);
+            return;
         }
 
         try {
             $coupon = Coupon::find($id);
         } catch (Throwable $e) {
             JsonResponse::send(['success' => false, 'message' => 'Error al buscar el cupon'], 500);
+            return;
         }
 
         if (!$coupon) {
             JsonResponse::send(['success' => false, 'message' => 'Cupon no encontrado'], 404);
+            return;
         }
 
         try {
             $res = $coupon->eliminar();
         } catch (Throwable $e) {
             JsonResponse::send(['success' => false, 'message' => 'Error al eliminar el cupon'], 500);
+            return;
         }
 
         if (!$res) {
             JsonResponse::send(['success' => false, 'message' => 'No se pudo eliminar el cupon'], 500);
+            return;
         }
 
         JsonResponse::send([

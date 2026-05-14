@@ -38,7 +38,9 @@ class ClientController
         $usuariosFiltrados = array_map(function ($u) {
             return [
                 'id'       => $u->id,
+                'full_name' => $u->full_name,
                 'username' => $u->username,
+                'admin'    => $u->admin,
             ];
         }, $usuarios);
 
@@ -95,6 +97,21 @@ class ClientController
             exit;
         }
 
+        if (empty($newUser->username)) {
+            JsonResponse::send(['success' => false, 'message' => 'El usuario es obligatorio'], 422);
+            exit;
+        }
+
+        if (empty($newUser->full_name)) {
+            JsonResponse::send(['success' => false, 'message' => 'El nombre del usuario es obligatorio'], 422);
+            exit;
+        }
+
+        if (empty($newUser->password)) {
+            JsonResponse::send(['success' => false, 'message' => 'La contraseña es obligatoria'], 422);
+            exit;
+        }
+
         $newUser->hashearPassword();
 
         try {
@@ -110,6 +127,8 @@ class ClientController
         $userCreated =  [
             'id'       => $res['id'],
             'username' => $newUser->username,
+            'full_name' => $newUser->full_name,
+            'admin'    => $newUser->admin,
         ];
 
         JsonResponse::send([
@@ -128,9 +147,14 @@ class ClientController
 
         $payload = self::readBody();
         $id = $payload['id'] ?? null;
-
         if (!$id) {
             JsonResponse::send(['success' => false, 'message' => 'Falta id'], 400);
+            exit;
+        }
+
+        if (empty($payload['full_name'])) {
+            JsonResponse::send(['success' => false, 'message' => 'El nombre del usuario es obligatorio'], 422);
+            exit;
         }
 
         $user = Client::find($id);
@@ -147,6 +171,7 @@ class ClientController
         }
 
         $user->username = trim($payload['username']);
+        $user->full_name = trim($payload['full_name']);
 
         // password opcional + hash
         if (!empty($payload['password'])) {
