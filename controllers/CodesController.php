@@ -161,7 +161,7 @@ class CodesController
 
     public static function update()
     {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST' ) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             JsonResponse::send([
                 'success' => false,
                 'message' => 'Método no permitido.',
@@ -385,7 +385,7 @@ class CodesController
 
     private static function validateType(string $type): void
     {
-        $allowedTypes = ['department', 'alliance', 'discount'];
+        $allowedTypes = ['department', 'alliance', 'discount', 'internal'];
 
         if (!in_array($type, $allowedTypes, true)) {
             throw new \InvalidArgumentException('El tipo de código no es válido.');

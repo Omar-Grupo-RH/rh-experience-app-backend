@@ -30,7 +30,7 @@ class Code extends ActiveRecord
     {
         $errores = [];
 
-        $allowedTypes = ['department', 'alliance', 'discount'];
+        $allowedTypes = ['department', 'alliance', 'discount', 'internal'];
 
         if (!$this->type || !in_array($this->type, $allowedTypes, true)) {
             $errores[] = 'El tipo de código no es válido.';
