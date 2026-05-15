@@ -48,6 +48,7 @@ use Controllers\CommentsController;
 use Controllers\DashboardController;
 use Controllers\LoginController;
 use Controllers\ReservationController;
+use Controllers\SurveyController;
 use Controllers\TripController;
 use MVC\Router;
 
@@ -95,5 +96,14 @@ $router->post('/api/codes', [CodesController::class, 'store']);
 $router->post('/api/codes/update', [CodesController::class, 'update']);
 $router->post('/api/codes/destroy', [CodesController::class, 'delete']);
 $router->get('/api/codes/validate', [CodesController::class, 'validate']);
+
+$router->get('/api/survey', [SurveyController::class, 'show']);
+$router->post('/api/survey', [SurveyController::class, 'store']);
+
+$router->get('/api/admin/survey-responses', [SurveyController::class, 'adminIndex']);
+$router->get('/api/admin/survey-response', [SurveyController::class, 'adminShow']);
+$router->get('/api/admin/survey-stats', [SurveyController::class, 'adminStats']);
+
+$router->get('/api/surveys/send-pending', [SurveyController::class, 'sendPendingSurveys']);
 
 $router->comprobarRutas();

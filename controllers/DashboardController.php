@@ -12,7 +12,7 @@ class DashboardController
 
     public static function getTravels()
     {
-        $travels = Trip::allWithPassengersCount();
+        $travels = Trip::allWithPassengersCount('ASC');
         JsonResponse::send([
             'success' => true,
             'data'    => $travels,
