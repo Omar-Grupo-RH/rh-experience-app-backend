@@ -105,6 +105,7 @@ class ReservationController
                     'phone'      => trim($p['phone'] ?? ''),
                     'born_date'  => $p['born_date'] ?? null,
                     'allergies'  => $p['allergies'] ?? [],
+                    'health_conditions' => $p['health_conditions'] ?? []
                 ]);
 
                 $resP = $passenger->guardar();

@@ -20,6 +20,7 @@ class TicketPassenger extends ActiveRecord
         'phone',
         'born_date',
         'allergies',
+        'health_conditions',
         'created_at'
     ];
 
@@ -33,6 +34,7 @@ class TicketPassenger extends ActiveRecord
     public string $phone;
     public ?string $born_date;
     public string $allergies;
+    public string $health_conditions;
     public string $created_at;
 
     public function __construct($args = [])
@@ -55,6 +57,10 @@ class TicketPassenger extends ActiveRecord
         $this->allergies = is_array($args['allergies'] ?? null)
             ? json_encode($args['allergies'], JSON_UNESCAPED_UNICODE)
             : ($args['allergies'] ?? '[]');
+
+        $this->health_conditions = is_array($args['health_conditions'] ?? null)
+            ? json_encode($args['health_conditions'], JSON_UNESCAPED_UNICODE)
+            : ($args['health_conditions'] ?? '[]');
 
         $this->created_at = $args['created_at'] ?? $this->nowDateMerida();
     }

@@ -192,7 +192,6 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
   {
     $this->body = $body;
     $this->mail->Body = $body;
-    // Mantén AltBody legible (opcional: podrías regenerar desde buildPlainTextTemplate)
     $this->mail->AltBody = strip_tags($body);
     return $this;
   }

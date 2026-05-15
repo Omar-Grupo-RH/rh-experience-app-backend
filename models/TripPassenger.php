@@ -18,6 +18,7 @@ class TripPassenger extends ActiveRecord
         'born_date',
         'allergies',
         'created_at',
+        'health_conditions',
 
         'registration_id',
         'registration_type',
@@ -48,6 +49,7 @@ class TripPassenger extends ActiveRecord
     public $phone;
     public $born_date;
     public $allergies;
+    public $health_conditions;
     public $created_at;
 
     public $registration_id;
@@ -81,6 +83,7 @@ class TripPassenger extends ActiveRecord
         $this->phone = $args['phone'] ?? '';
         $this->born_date = $args['born_date'] ?? null;
         $this->allergies = $args['allergies'] ?? '[]';
+        $this->health_conditions = $args['health_conditions'] ?? '[]';
         $this->created_at = $args['created_at'] ?? null;
 
         $this->registration_id = $args['registration_id'] ?? null;
@@ -118,6 +121,7 @@ class TripPassenger extends ActiveRecord
                 tp.phone,
                 tp.born_date,
                 tp.allergies,
+                tp.health_conditions,    
                 tp.created_at,
 
                 rr.id AS registration_id,

@@ -177,10 +177,21 @@ class ActiveRecord
     }
 
     // Obtener todos los Registros
-    public static function all($orden = 'DESC')
+    public static function all($orden = 'DESC', $columna = 'id')
     {
-        $query = "SELECT * FROM " . static::$tabla . " ORDER BY id {$orden}";
+        $orden = strtoupper($orden);
+
+        if (!in_array($orden, ['ASC', 'DESC'])) {
+            $orden = 'DESC';
+        }
+
+        if (!in_array($columna, static::$columnasDB)) {
+            $columna = 'id';
+        }
+
+        $query = "SELECT * FROM " . static::$tabla . " ORDER BY {$columna} {$orden}";
         $resultado = self::consultarSQL($query);
+
         return $resultado;
     }
 
