@@ -50,11 +50,7 @@ class ReservationController
 
             $db->begin_transaction();
 
-            $idem = self::lockIdempotencyKey(
-                $db,
-                $idempotencyKey,
-                $payloadHash
-            );
+            $idem = self::lockIdempotencyKey($db, $idempotencyKey, $payloadHash);
 
             if ($idem['status'] === 'completed') {
                 $db->commit();
@@ -477,30 +473,57 @@ class ReservationController
                 ($payload['trip_data']['tickets_name'] ?? '') ?: (($firstPassenger['first_name'] ?? '') . ' ' . ($firstPassenger['last_name'] ?? ''))
             );
 
+            $tripDate = $payload['trip_data']['date'] ?? '';
+
             $payloadPdf = [
                 'trip_data' => [
                     'trip_id' => $payload['trip_data']['trip_id'],
-                    'date' => $payload['trip_data']['date'] ?? '',
+                    'date' => $tripDate,
                     'seats' => $seatNumbers,
                     'tickets_name' => $ticketsName
                 ],
                 'passengers' => $payload['passengers']
             ];
 
-            $pdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
+            $ticketsPdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
 
-            if ($pdfPath && file_exists($pdfPath)) {
-                $email = new Email(
-                    $emailTo,
-                    $ticketsName,
-                    'Tus Boletos RH',
-                    $payload['trip_data']['date'] ?? '',
-                    implode(', ', $seatNumbers)
-                );
+            $email = new Email(
+                $emailTo,
+                $ticketsName,
+                'Tus Boletos RH',
+                $tripDate,
+                implode(', ', $seatNumbers)
+            );
 
-                $email->addAttachment($pdfPath, 'boletos-rh.pdf');
-                $email->send();
+            if ($ticketsPdfPath && file_exists($ticketsPdfPath)) {
+                $email->addAttachment($ticketsPdfPath, 'boletos-rh.pdf');
             }
+
+            $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
+
+            if ($registrationType === 'prospect') {
+                $pricePerTicket = 800;
+                $ticketsCount = count($payload['passengers']);
+                $totalAmount = $ticketsCount * $pricePerTicket;
+
+                $paymentPdfPath = TicketPdfService::buildPaymentSlipPdf([
+                    'client_name' => $ticketsName,
+                    'client_email' => $emailTo,
+                    'trip_date' => $tripDate,
+                    'seats' => $seatNumbers,
+                    'tickets_count' => $ticketsCount,
+                    'price_per_ticket' => $pricePerTicket,
+                    'total_amount' => $totalAmount,
+                    'passengers' => $payload['passengers'],
+                    'registration' => $payload['RegistrationType'] ?? [],
+                ]);
+
+                if ($paymentPdfPath && file_exists($paymentPdfPath)) {
+                    $email->addAttachment($paymentPdfPath, 'ficha-de-pago-rh-experience.pdf');
+                }
+            }
+
+            $email->send();
         } catch (\Throwable $e) {
             error_log('Error enviando email post-reserva: ' . $e->getMessage());
         }
