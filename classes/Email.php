@@ -3,7 +3,6 @@
 namespace Classes;
 
 use PHPMailer\PHPMailer\PHPMailer;
-//use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 class Email
@@ -18,64 +17,75 @@ class Email
   private string $asientos;
   private string $tripId;
 
-  public function __construct(string $email, string $nombre, string $subject, string $fecha, string $asientos = '', string $tripId = '')
-  {
-    $this->email   = $email;
-    $this->nombre  = $nombre;
+  public function __construct(
+    string $email,
+    string $nombre,
+    string $subject,
+    string $fecha,
+    string $asientos = '',
+    string $tripId = ''
+  ) {
+    $this->email = $email;
+    $this->nombre = $nombre;
     $this->subject = $subject;
-    $this->fecha   = $fecha;
+    $this->fecha = $fecha;
     $this->asientos = $asientos;
-    $this->tripId   = $tripId;
+    $this->tripId = $tripId;
 
-    // Inicializa PHPMailer y configura SMTP primero
     $this->mail = new PHPMailer(true);
     $this->configurarSMTP();
 
-
-
-    // Construye cuerpo HTML + texto plano
     $this->body = $this->buildEmailTemplate();
-    $this->mail->Body    = $this->body;
+    $this->mail->Body = $this->body;
     $this->mail->AltBody = $this->buildPlainTextTemplate();
   }
 
   private function configurarSMTP(): void
   {
     try {
-      // Servidor
-      $this->mail->isSMTP();
-      $this->mail->Host       = 'smtp.gmail.com';
-      $this->mail->SMTPAuth   = true;
-      $this->mail->Username   = $_ENV['GMAIL_ACCOUNT'];
-      $this->mail->Password   = $_ENV['GMAIL_PASSWORD'];
-      $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-      $this->mail->Port       = 587;
+      $host = $_ENV['MAIL_HOST'] ?? '';
+      $username = $_ENV['MAIL_USERNAME'] ?? '';
+      $password = $_ENV['MAIL_PASSWORD'] ?? '';
+      $from = $_ENV['MAIL_FROM'] ?? $username;
+      $fromName = $_ENV['MAIL_FROM_NAME'] ?? 'RH Experience';
+      $port = (int) ($_ENV['MAIL_PORT'] ?? 465);
+      $encryption = strtolower($_ENV['MAIL_ENCRYPTION'] ?? 'ssl');
 
-      // Orígenes y destino
-      $this->mail->setFrom($_ENV['GMAIL_ACCOUNT'], 'RH Experience');
+      if (!$host || !$username || !$password || !$from) {
+        throw new \Exception('Faltan variables SMTP en el .env.');
+      }
+
+      $this->mail->isSMTP();
+      $this->mail->Host = $host;
+      $this->mail->SMTPAuth = true;
+      $this->mail->Username = $username;
+      $this->mail->Password = $password;
+
+      $this->mail->SMTPSecure = $encryption === 'ssl'
+        ? PHPMailer::ENCRYPTION_SMTPS
+        : PHPMailer::ENCRYPTION_STARTTLS;
+
+      $this->mail->Port = $port;
+
+      $this->mail->CharSet = 'UTF-8';
+      $this->mail->Encoding = 'base64';
+
+      $this->mail->setFrom($from, $fromName);
+      $this->mail->addReplyTo($from, $fromName);
       $this->mail->addAddress($this->email, $this->nombre);
 
-      // Contenido
       $this->mail->isHTML(true);
       $this->mail->Subject = $this->subject;
-      $this->mail->CharSet = 'UTF-8';
     } catch (Exception $e) {
       throw new \Exception("Error configurando SMTP: " . $e->getMessage());
     }
   }
 
-
-
-  /**
-   * Construye el HTML del email (usa <img> en vez de background-image).
-   */
   private function buildEmailTemplate(): string
   {
-    // Escapes mínimos
     $nombre = htmlspecialchars($this->nombre ?? '', ENT_QUOTES, 'UTF-8');
-    $fecha  = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
+    $fecha = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
     $asientos = htmlspecialchars($this->asientos ?? '', ENT_QUOTES, 'UTF-8');
-    $tripId   = htmlspecialchars($this->tripId ?? '', ENT_QUOTES, 'UTF-8');
 
     $asientosHtml = $this->asientos ? "
             <div class='detail-item'>
@@ -94,7 +104,6 @@ class Email
           <style>
             body { margin:0; padding:0; background:#f4f4f4; font-family: Arial, sans-serif; line-height:1.6; }
             .container { max-width:600px; margin:20px auto; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 0 20px rgba(0,0,0,.1); }
-            .header img { display:block; width:100%; height:auto; }
             .header-title { text-align:center; padding:20px; background:#d63384; color:#fff; }
             .header-title h1 { margin:0 0 5px 0; }
             .content { padding:30px; }
@@ -109,11 +118,9 @@ class Email
         </head>
         <body>
           <div class='container'>
-            <div class='header'>
-              <div class='header-title'>
-                <h1>🚌 RH Experience</h1>
-                <p>Tu aventura comienza aquí</p>
-              </div>
+            <div class='header-title'>
+              <h1>🚌 RH Experience</h1>
+              <p>Tu aventura comienza aquí</p>
             </div>
 
             <div class='content'>
@@ -125,7 +132,6 @@ class Email
                 <h3>📋 Detalles de la Reserva</h3>
                 <div class='detail-item'><span><strong>Fecha del viaje:</strong></span><span>{$fecha}</span></div>
                 {$asientosHtml}
-         
               </div>
 
               <div class='info-box'>
@@ -136,7 +142,7 @@ class Email
 
               <div class='contact'>
                 <h3>📞 ¿Necesitas ayuda?</h3>
-                <p><strong>Email:</strong> rhexperience@gruporh.com</p>
+                <p><strong>Email:</strong> experience@gruporh.mx</p>
                 <p><strong>Teléfono:</strong> +52 999 242 0278</p>
                 <p><strong>Horario:</strong> Lunes a Viernes 9:00 - 18:00 hrs</p>
               </div>
@@ -154,6 +160,7 @@ class Email
   private function buildPlainTextTemplate(): string
   {
     $year = date('Y');
+
     $text = "
 CONFIRMACIÓN DE RESERVA - RH EXPERIENCE
 
@@ -176,15 +183,16 @@ INFORMACIÓN DE LA RESERVA:
     $text .= "
 PUNTO DE ENCUENTRO:
 Oficinas de Grupo RH
-Por favor llega 30 minutos antes de la hora de salida.
+Por favor llega 10 minutos antes de la hora de salida.
 
 CONTACTO:
-Email: rhexperience@gruporh.com
+Email: experience@gruporh.mx
 Teléfono: +52 999 242 0278
 Horario: Lunes a Viernes 9:00 - 18:00 hrs
 
 © {$year} RH Experience. Todos los derechos reservados.
 ";
+
     return $text;
   }
 
@@ -193,6 +201,7 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
     $this->body = $body;
     $this->mail->Body = $body;
     $this->mail->AltBody = strip_tags($body);
+
     return $this;
   }
 
@@ -203,6 +212,7 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
     } catch (Exception $e) {
       throw new \Exception("Error añadiendo adjunto: " . $e->getMessage());
     }
+
     return $this;
   }
 
@@ -212,7 +222,7 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
       $this->mail->send();
       return true;
     } catch (Exception $e) {
-      error_log("Error enviando email: " . $e->getMessage());
+      error_log("Error enviando email: " . $this->mail->ErrorInfo);
       return false;
     }
   }
@@ -222,9 +232,14 @@ Horario: Lunes a Viernes 9:00 - 18:00 hrs
     return $this->mail->ErrorInfo;
   }
 
-  // Envío rápido
-  public static function sendQuickEmail($to, $name, $subject, $fecha, $asientos = '', $tripId = ''): bool
-  {
+  public static function sendQuickEmail(
+    $to,
+    $name,
+    $subject,
+    $fecha,
+    $asientos = '',
+    $tripId = ''
+  ): bool {
     $email = new self($to, $name, $subject, $fecha, $asientos, $tripId);
     return $email->send();
   }

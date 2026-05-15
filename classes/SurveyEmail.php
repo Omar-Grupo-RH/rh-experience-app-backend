@@ -32,26 +32,12 @@ class SurveyEmail
     $mail = new PHPMailer(true);
 
     try {
-      $mail->isSMTP();
-      $mail->Host =  'smtp.gmail.com';
-      $mail->SMTPAuth = true;
-      $mail->Username = $_ENV['GMAIL_ACCOUNT'];
-      $mail->Password = $_ENV['GMAIL_PASSWORD'];
-      $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-      $mail->Port = 587;
-
-      $mail->CharSet = 'UTF-8';
-
-      $mail->setFrom(
-        $_ENV['GMAIL_ACCOUNT'],
-        'RH Experience'
-      );
+      $this->configureSMTP($mail);
 
       $mail->addAddress($this->email, $this->name);
 
       $mail->isHTML(true);
       $mail->Subject = 'Queremos conocer tu experiencia';
-
       $mail->Body = $this->buildHtml();
       $mail->AltBody = $this->buildText();
 
@@ -59,7 +45,43 @@ class SurveyEmail
     } catch (Exception $e) {
       error_log('Error enviando encuesta: ' . $mail->ErrorInfo);
       return false;
+    } catch (\Throwable $e) {
+      error_log('Error enviando encuesta: ' . $e->getMessage());
+      return false;
     }
+  }
+
+  private function configureSMTP(PHPMailer $mail): void
+  {
+    $host = $_ENV['MAIL_HOST'] ?? '';
+    $username = $_ENV['MAIL_USERNAME'] ?? '';
+    $password = $_ENV['MAIL_PASSWORD'] ?? '';
+    $from = $_ENV['MAIL_FROM'] ?? $username;
+    $fromName = $_ENV['MAIL_FROM_NAME'] ?? 'RH Experience';
+    $port = (int) ($_ENV['MAIL_PORT'] ?? 465);
+    $encryption = strtolower($_ENV['MAIL_ENCRYPTION'] ?? 'ssl');
+
+    if (!$host || !$username || !$password || !$from) {
+      throw new \Exception('Faltan variables SMTP en el .env.');
+    }
+
+    $mail->isSMTP();
+    $mail->Host = $host;
+    $mail->SMTPAuth = true;
+    $mail->Username = $username;
+    $mail->Password = $password;
+
+    $mail->SMTPSecure = $encryption === 'ssl'
+      ? PHPMailer::ENCRYPTION_SMTPS
+      : PHPMailer::ENCRYPTION_STARTTLS;
+
+    $mail->Port = $port;
+
+    $mail->CharSet = 'UTF-8';
+    $mail->Encoding = 'base64';
+
+    $mail->setFrom($from, $fromName);
+    $mail->addReplyTo($from, $fromName);
   }
 
   private function buildHtml(): string
