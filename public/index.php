@@ -79,6 +79,9 @@ $router->post('/api/trip/destroy', [TripController::class, 'destroy'], true);
 
 $router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
+$router->get('/api/admin/dashboard', [DashboardController::class, 'index']);
+
+
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
 
 
