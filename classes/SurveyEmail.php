@@ -86,71 +86,151 @@ class SurveyEmail
 
   private function buildHtml(): string
   {
-    $name = htmlspecialchars($this->name ?: 'Hola', ENT_QUOTES, 'UTF-8');
+    $name = htmlspecialchars($this->name ?: 'Explorador', ENT_QUOTES, 'UTF-8');
     $tripTitle = htmlspecialchars($this->tripTitle, ENT_QUOTES, 'UTF-8');
     $tripDate = htmlspecialchars($this->tripDate, ENT_QUOTES, 'UTF-8');
     $surveyUrl = htmlspecialchars($this->surveyUrl, ENT_QUOTES, 'UTF-8');
+    $year = date('Y');
 
     return <<<HTML
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Encuesta RH Experience</title>
 </head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1f2937;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:30px 0;">
+
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 14px;">
     <tr>
       <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 18px 45px rgba(15,23,42,.08);">
+          
           <tr>
-            <td style="background:#315fa8;padding:28px;color:#ffffff;">
-              <h1 style="margin:0;font-size:26px;">RH Experience</h1>
-              <p style="margin:8px 0 0;font-size:14px;">Gracias por vivir esta experiencia con nosotros.</p>
+            <td style="background:#315fa8;padding:34px 32px;color:#ffffff;">
+              <p style="margin:0 0 8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:rgba(255,255,255,.74);">
+                RH Experience
+              </p>
+
+              <h1 style="margin:0;font-size:30px;line-height:1.15;font-weight:900;color:#ffffff;">
+                Queremos conocer tu experiencia
+              </h1>
+
+              <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(255,255,255,.82);">
+                Gracias por ser parte de esta aventura. Tu opinión nos ayuda a mejorar cada recorrido.
+              </p>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:28px;">
-              <h2 style="margin:0 0 12px;font-size:22px;color:#111827;">
-                Hola {$name}
-              </h2>
-
-              <p style="font-size:15px;line-height:1.6;color:#4b5563;">
-                Queremos conocer tu opinión sobre tu experiencia en:
-              </p>
-
-              <div style="background:#f1f5f9;border-radius:14px;padding:18px;margin:20px 0;">
-                <p style="margin:0;font-size:13px;color:#64748b;">RH Experience</p>
-                <p style="margin:5px 0 0;font-size:18px;font-weight:bold;color:#111827;">{$tripTitle}</p>
-                <p style="margin:5px 0 0;font-size:14px;color:#64748b;">Fecha: {$tripDate}</p>
+            <td style="padding:32px;">
+              <div style="display:inline-block;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;margin-bottom:22px;">
+                Encuesta de retroalimentación
               </div>
 
-              <p style="font-size:15px;line-height:1.6;color:#4b5563;">
-                Tu respuesta nos ayuda a mejorar cada viaje, cada detalle y cada experiencia.
+              <h2 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:900;">
+                ¡Hola {$name}!
+              </h2>
+
+              <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#475569;">
+                Queremos agradecerte nuevamente por vivir RH Experience con nosotros. Te invitamos a responder este breve cuestionario para conocer tus impresiones y sugerencias.
               </p>
 
-              <div style="text-align:center;margin:30px 0;">
-                <a href="{$surveyUrl}" target="_blank" style="display:inline-block;background:#d63384;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:12px;font-weight:bold;font-size:15px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:4px 18px;margin:24px 0;">
+                <tr>
+                  <td style="padding:18px 0;border-bottom:1px solid #e5e7eb;">
+                    <span style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">
+                      RH Experience
+                    </span>
+                    <span style="display:block;margin-top:4px;font-size:18px;font-weight:900;color:#111827;">
+                      {$tripTitle}
+                    </span>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:18px 0;">
+                    <span style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">
+                      Fecha del viaje
+                    </span>
+                    <span style="display:block;margin-top:4px;font-size:18px;font-weight:900;color:#111827;">
+                      {$tripDate}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:20px;">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#14532d;font-weight:900;">
+                      Tu opinión es importante
+                    </h3>
+
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#166534;">
+                      Tus respuestas nos ayudan a mejorar la organización, el acompañamiento, los recorridos y cada detalle de las próximas experiencias.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="text-align:center;margin:32px 0 28px;">
+                <a href="{$surveyUrl}" target="_blank" style="display:inline-block;background:#d63384;color:#ffffff;text-decoration:none;padding:15px 26px;border-radius:14px;font-weight:900;font-size:15px;box-shadow:0 10px 24px rgba(214,51,132,.22);">
                   Responder encuesta
                 </a>
               </div>
 
-              <p style="font-size:13px;color:#64748b;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:18px;padding:20px;">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#9a3412;font-weight:900;">
+                      Tiempo estimado
+                    </h3>
+
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#7c2d12;">
+                      El cuestionario es breve y solo tomará unos minutos. Responde con total honestidad; tus comentarios serán revisados por nuestro equipo.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:24px 0 8px;font-size:13px;color:#64748b;">
                 Si el botón no funciona, copia y pega este enlace en tu navegador:
               </p>
 
-              <p style="font-size:12px;word-break:break-all;color:#315fa8;">
+              <p style="margin:0;font-size:12px;line-height:1.6;word-break:break-all;color:#315fa8;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:14px;">
                 {$surveyUrl}
               </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:20px;">
+                <tr>
+                  <td align="center">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#0f172a;font-weight:900;">
+                      Gracias por ayudarnos a mejorar
+                    </h3>
+
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
+                      Cada comentario nos acerca a crear experiencias más memorables para clientes, inversionistas y aliados.
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:18px 28px;background:#f8fafc;color:#94a3b8;font-size:12px;text-align:center;">
-              Este correo fue enviado automáticamente por RH Experience.
+            <td style="background:#0f172a;padding:22px 32px;text-align:center;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#cbd5e1;">
+                &copy; {$year} RH Experience. Todos los derechos reservados.
+              </p>
+
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                Este correo fue enviado automáticamente por RH Experience.
+              </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -162,6 +242,24 @@ HTML;
 
   private function buildText(): string
   {
-    return "Hola {$this->name}, gracias por vivir RH Experience. Responde nuestra encuesta aquí: {$this->surveyUrl}";
+    return "
+ENCUESTA RH EXPERIENCE
+
+Hola {$this->name},
+
+Gracias por vivir RH Experience con nosotros.
+
+Queremos conocer tu opinión sobre:
+{$this->tripTitle}
+Fecha: {$this->tripDate}
+
+Tu respuesta nos ayuda a mejorar cada viaje, cada detalle y cada experiencia.
+
+Responde la encuesta aquí:
+{$this->surveyUrl}
+
+Gracias por ayudarnos a mejorar.
+RH Experience
+";
   }
 }

@@ -86,75 +86,251 @@ class Email
     $nombre = htmlspecialchars($this->nombre ?? '', ENT_QUOTES, 'UTF-8');
     $fecha = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
     $asientos = htmlspecialchars($this->asientos ?? '', ENT_QUOTES, 'UTF-8');
+    $tripId = htmlspecialchars($this->tripId ?? '', ENT_QUOTES, 'UTF-8');
 
     $asientosHtml = $this->asientos ? "
-            <div class='detail-item'>
-                <span><strong>Asientos: </strong></span><span>{$asientos}</span>
-            </div>" : "";
+      <tr>
+        <td style='padding:14px 0;border-bottom:1px solid #e5e7eb;'>
+          <span style='display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;'>Asientos</span>
+          <span style='display:block;margin-top:4px;font-size:16px;font-weight:800;color:#111827;'>{$asientos}</span>
+        </td>
+      </tr>
+    " : "";
+
+    $tripIdHtml = $this->tripId ? "
+      <tr>
+        <td style='padding:14px 0;border-bottom:1px solid #e5e7eb;'>
+          <span style='display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;'>ID de reserva</span>
+          <span style='display:block;margin-top:4px;font-size:16px;font-weight:800;color:#111827;'>#{$tripId}</span>
+        </td>
+      </tr>
+    " : "";
 
     $year = date('Y');
 
-    return "
-        <!DOCTYPE html>
-        <html lang='es'>
-        <head>
-          <meta charset='UTF-8'>
-          <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-          <title>Confirmación de Reserva - RH Experience</title>
-          <style>
-            body { margin:0; padding:0; background:#f4f4f4; font-family: Arial, sans-serif; line-height:1.6; }
-            .container { max-width:600px; margin:20px auto; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 0 20px rgba(0,0,0,.1); }
-            .header-title { text-align:center; padding:20px; background:#d63384; color:#fff; }
-            .header-title h1 { margin:0 0 5px 0; }
-            .content { padding:30px; }
-            .info-box { background:#f8f9fa; border-left:4px solid #d63384; padding:20px; margin:20px 0; border-radius:8px; }
-            .detail-item { display:flex; justify-content:space-between; border-bottom:1px solid #dee2e6; padding:10px 0; }
-            .detail-item:last-child { border-bottom:none; }
-            .footer { background:#2c3e50; color:#fff; text-align:center; padding:20px; font-size:14px; }
-            .success-badge { background:#28a745; color:#fff; padding:10px 20px; border-radius:25px; display:inline-block; margin-bottom:20px; font-weight:bold; }
-            .welcome { margin-bottom:10px; }
-            .contact { background:#e3f2fd; padding:20px; border-radius:8px; text-align:center; border:1px solid #bbdefb; }
-          </style>
-        </head>
-        <body>
-          <div class='container'>
-            <div class='header-title'>
-              <h1>🚌 RH Experience</h1>
-              <p>Tu aventura comienza aquí</p>
-            </div>
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirmación de reserva - RH Experience</title>
+</head>
 
-            <div class='content'>
-              <div class='success-badge'>✅ RESERVA CONFIRMADA</div>
-              <h2 class='welcome'>¡Hola {$nombre}!</h2>
-              <p>Tu reserva ha sido confirmada exitosamente. Aquí tienes los detalles de tu viaje:</p>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 14px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 18px 45px rgba(15,23,42,.08);">
+          
+          <tr>
+            <td style="background:#315fa8;padding:34px 32px;color:#ffffff;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.22em;color:rgba(255,255,255,.74);">
+                      RH Experience
+                    </p>
 
-              <div class='info-box'>
-                <h3>📋 Detalles de la Reserva</h3>
-                <div class='detail-item'><span><strong>Fecha del viaje:</strong></span><span>{$fecha}</span></div>
+                    <h1 style="margin:0;font-size:30px;line-height:1.15;font-weight:900;color:#ffffff;">
+                      Reserva confirmada
+                    </h1>
+
+                    <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(255,255,255,.82);">
+                      Tu aventura ya está lista. Adjuntamos tu boleto en este correo.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;">
+              <div style="display:inline-block;background:#ecfdf5;color:#15803d;border:1px solid #bbf7d0;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;margin-bottom:22px;">
+                Confirmación exitosa
+              </div>
+
+              <h2 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:900;">
+                ¡Hola {$nombre}!
+              </h2>
+
+              <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#475569;">
+                Tu reservación ha sido registrada correctamente. Te compartimos los detalles principales de tu RH Experience.
+              </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:4px 18px;margin:24px 0;">
+                <tr>
+                  <td style="padding:18px 0;border-bottom:1px solid #e5e7eb;">
+                    <span style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Fecha del viaje</span>
+                    <span style="display:block;margin-top:4px;font-size:18px;font-weight:900;color:#111827;">{$fecha}</span>
+                  </td>
+                </tr>
+
                 {$asientosHtml}
-              </div>
+                {$tripIdHtml}
 
-              <div class='info-box'>
-                <h3>📍 Punto de encuentro</h3>
-                <p><strong>Oficinas de Grupo RH</strong></p>
-                <p>Por favor llega 10 minutos antes de la hora de salida.</p>
-              </div>
+                <tr>
+                  <td style="padding:16px 0;">
+                    <span style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Estado</span>
+                    <span style="display:block;margin-top:4px;font-size:16px;font-weight:800;color:#15803d;">Boleto generado</span>
+                  </td>
+                </tr>
+              </table>
 
-              <div class='contact'>
-                <h3>📞 ¿Necesitas ayuda?</h3>
-                <p><strong>Email:</strong> experience@gruporh.mx</p>
-                <p><strong>Teléfono:</strong> +52 999 242 0278</p>
-                <p><strong>Horario:</strong> Lunes a Viernes 9:00 - 18:00 hrs</p>
-              </div>
-            </div>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:18px;padding:20px;">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#9a3412;font-weight:900;">
+                      Punto de encuentro
+                    </h3>
 
-            <div class='footer'>
-              <p>&copy; {$year} RH Experience. Todos los derechos reservados.</p>
-              <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
-            </div>
-          </div>
-        </body>
-        </html>";
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#7c2d12;">
+                      <strong>Oficinas de Grupo RH</strong><br>
+                      Te recomendamos llegar 10 minutos antes de la hora de salida.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+                <tr>
+                  <td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:18px;padding:20px;">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#1e3a8a;font-weight:900;">
+                      Antes de abordar
+                    </h3>
+
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#1e40af;">
+                      Presenta tu boleto adjunto y una identificación. Si reservaste más de un asiento, este correo incluye la información correspondiente a tus pasajeros.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;padding:0;overflow:hidden;">
+                <tr>
+                  <td style="background:#0891b2;padding:22px 24px;">
+                    <p style="margin:0 0 6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.75);">
+                      Recomendaciones
+                    </p>
+
+                    <h3 style="margin:0;font-size:22px;line-height:1.25;color:#ffffff;font-weight:900;">
+                      Antes de tu aventura
+                    </h3>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:24px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                      <tr>
+                        <td style="width:44px;vertical-align:top;">
+                          <div style="width:36px;height:36px;border-radius:12px;background:#fce7f3;color:#d63384;text-align:center;line-height:36px;font-size:14px;font-weight:900;">
+                            ATV
+                          </div>
+                        </td>
+
+                        <td style="vertical-align:top;">
+                          <h4 style="margin:0 0 10px;font-size:18px;color:#d63384;font-weight:900;text-transform:uppercase;">
+                            Cuatrimotos
+                          </h4>
+
+                          <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#475569;">
+                            <li>Usa playera de <strong style="color:#d63384;">manga larga dry fit</strong>.</li>
+                            <li>Lleva pantalón <strong style="color:#d63384;">tipo explorer</strong> de tela gruesa.</li>
+                            <li><strong style="color:#d63384;">Retira piercings</strong> que puedan estar en contacto con el casco.</li>
+                            <li>Si tienes cabello largo, úsalo con <strong style="color:#d63384;">trenza</strong>. Evita chongos o coletas.</li>
+                          </ul>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                      <tr>
+                        <td style="width:44px;vertical-align:top;">
+                          <div style="width:36px;height:36px;border-radius:12px;background:#ccfbf1;color:#0f766e;text-align:center;line-height:36px;font-size:18px;font-weight:900;">
+                            C
+                          </div>
+                        </td>
+
+                        <td style="vertical-align:top;">
+                          <h4 style="margin:0 0 10px;font-size:18px;color:#0f8b9b;font-weight:900;text-transform:uppercase;">
+                            Cenotes
+                          </h4>
+
+                          <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#64748b;">
+                            No es obligatorio meterse, pero te aseguramos que te encantará.
+                          </p>
+
+                          <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#0f8b9b;font-weight:800;">
+                            <li>Traje de baño debajo de tu ropa.</li>
+                            <li>Gorra, chanclas y toalla.</li>
+                          </ul>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px;">
+                          <h4 style="margin:0 0 10px;font-size:18px;color:#f59e0b;font-weight:900;text-transform:uppercase;">
+                            ¡Importante!
+                          </h4>
+
+                          <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.7;color:#9a3412;">
+                            <li>Si tienes alguna condición médica, <strong>indícalo a la brevedad</strong>.</li>
+                            <li>Te recomendamos <strong>no llevar artículos de valor</strong>.</li>
+                            <li><strong>Escucha atentamente las instrucciones</strong> de tu guía de RH Experience.</li>
+                          </ul>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:22px 0 0;font-size:15px;line-height:1.6;color:#0f172a;">
+                      Recuerda llegar a tiempo y prepárate para vivir una
+                      <strong style="color:#0891b2;">experiencia inolvidable</strong>.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:20px;">
+                <tr>
+                  <td align="center">
+                    <h3 style="margin:0 0 10px;font-size:17px;color:#0f172a;font-weight:900;">
+                      ¿Necesitas ayuda?
+                    </h3>
+
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
+                      <strong>Email:</strong> experience@gruporh.mx<br>
+                      <strong>Teléfono:</strong> +52 999 242 0278<br>
+                      <strong>Horario:</strong> Lunes a viernes de 9:00 a 18:00 hrs
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#0f172a;padding:22px 32px;text-align:center;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#cbd5e1;">
+                &copy; {$year} RH Experience. Todos los derechos reservados.
+              </p>
+
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                Este correo fue enviado automáticamente. Por favor, no respondas a este mensaje.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+HTML;
   }
 
   private function buildPlainTextTemplate(): string
@@ -168,7 +344,7 @@ CONFIRMACIÓN DE RESERVA - RH EXPERIENCE
 
 Tu reserva ha sido confirmada exitosamente.
 
-INFORMACIÓN DE LA RESERVA:
+DETALLES DE LA RESERVA:
 - Fecha del viaje: {$this->fecha}
 ";
 
@@ -182,13 +358,36 @@ INFORMACIÓN DE LA RESERVA:
 
     $text .= "
 PUNTO DE ENCUENTRO:
-Oficinas de Grupo RH
+Oficinas de Grupo RH.
 Por favor llega 10 minutos antes de la hora de salida.
+
+ANTES DE ABORDAR:
+Presenta tu boleto adjunto y una identificación.
+
+RECOMENDACIONES ANTES DE TU AVENTURA:
+
+CUATRIMOTOS:
+- Playera de manga larga dry fit.
+- Pantalón tipo explorer de tela gruesa.
+- Retirar piercings que puedan estar en contacto con el casco.
+- Si tienes cabello largo, úsalo con trenza. Evita chongos o coletas.
+
+CENOTES:
+No es obligatorio meterse, pero te aseguramos que te encantará.
+- Traje de baño debajo de tu ropa.
+- Gorra, chanclas y toalla.
+
+IMPORTANTE:
+- Si tienes alguna condición médica, indícalo a la brevedad.
+- Te recomendamos no llevar artículos de valor.
+- Escucha atentamente las instrucciones de tu guía de RH Experience.
+
+Recuerda llegar a tiempo y prepárate para vivir una experiencia inolvidable.
 
 CONTACTO:
 Email: experience@gruporh.mx
 Teléfono: +52 999 242 0278
-Horario: Lunes a Viernes 9:00 - 18:00 hrs
+Horario: Lunes a viernes de 9:00 a 18:00 hrs.
 
 © {$year} RH Experience. Todos los derechos reservados.
 ";

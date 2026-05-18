@@ -8,7 +8,7 @@ use Dompdf\Options;
 class TicketPdfService
 {
   /**
-   * Genera un solo PDF con una página por pasajero. Devuelve la ruta del archivo.
+   * Genera un solo PDF con una página por pasajero.
    */
   public static function buildTicketsPdf(array $payload, string $outputDir = '../public/tickets'): string
   {
@@ -16,22 +16,30 @@ class TicketPdfService
       @mkdir($outputDir, 0775, true);
     }
 
-    $date = $payload['trip_data']['date'] ?? '2025-11-10';
+    $date = $payload['trip_data']['date'] ?? '';
     $namePayment = $payload['trip_data']['tickets_name'] ?? 'rh-experience';
     $passengers = $payload['passengers'] ?? [];
+    $seats = $payload['trip_data']['seats'] ?? [];
 
     $html = self::buildHtmlHeader("Boletos RH Experience");
 
+    $totalPassengers = count($passengers);
+
     foreach ($passengers as $idx => $pax) {
+      $seatId = $pax['seat_id'] ?? ($seats[$idx] ?? '');
+
       $html .= self::ticketPageHtml([
         'date' => $date,
-        'seat_id' => $pax['seat_id'] ?? '',
+        'date_label' => self::formatDateForTicket($date),
+        'seat_id' => $seatId,
         'first_name' => $pax['first_name'] ?? '',
         'last_name' => $pax['last_name'] ?? '',
         'email' => $pax['email'] ?? '',
         'phone' => $pax['phone'] ?? '',
         'index' => $idx + 1,
-        'count' => count($passengers),
+        'count' => $totalPassengers,
+        'ticket_code' => self::ticketCode($date, $seatId, $pax['email'] ?? '', $idx),
+        'is_last' => ($idx + 1) === $totalPassengers,
       ]);
     }
 
@@ -60,6 +68,9 @@ class TicketPdfService
     return $filename;
   }
 
+  /**
+   * Genera ficha de pago para prospectos.
+   */
   public static function buildPaymentSlipPdf(array $payload, string $outputDir = '../public/tickets'): string
   {
     if (!is_dir($outputDir)) {
@@ -119,23 +130,292 @@ class TicketPdfService
 <head>
 <meta charset="UTF-8">
 <title>{$title}</title>
+
 <style>
-  @page { margin: 24pt; }
-  body { font-family: DejaVu Sans, Arial, sans-serif; color: #222; }
-  .ticket { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 28px; }
-  .row { display: flex; gap: 16px; }
-  .col { flex: 1; }
-  .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .brand { font-size: 18px; font-weight: 700; color: #d63384; }
-  .badge { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 8px; font-size: 12px; }
-  .title { font-size: 20px; font-weight: 700; margin: 8px 0 12px; }
-  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .item { background:#fafafa; border:1px solid #eee; border-radius:8px; padding:8px; }
-  .label { font-size: 11px; color:#6b7280; }
-  .footer { font-size: 10px; color:#6b7280; margin-top: 10px; }
-  .pagebreak { page-break-after: always; }
+  @page {
+    margin: 24pt;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: DejaVu Sans, Arial, sans-serif;
+    color: #0f172a;
+    background: #ffffff;
+  }
+
+  .page {
+    width: 100%;
+    min-height: 760px;
+  }
+
+  .pagebreak {
+    page-break-after: always;
+  }
+
+  .ticket-shell {
+    width: 100%;
+    border: 1px solid #dbe3ef;
+    border-radius: 24px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .hero {
+    background: #315fa8;
+    color: #ffffff;
+    padding: 28px 30px;
+  }
+
+  .hero-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #dbeafe;
+    font-weight: bold;
+  }
+
+  .brand-title {
+    margin: 8px 0 0;
+    font-size: 28px;
+    line-height: 1.1;
+    font-weight: 900;
+    color: #ffffff;
+  }
+
+  .hero-subtitle {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #e0ecff;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #315fa8;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .ticket-body {
+    padding: 26px 30px 30px;
+  }
+
+  .passenger-card {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 22px;
+  }
+
+  .passenger-name {
+    font-size: 26px;
+    line-height: 1.2;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+  }
+
+  .passenger-label {
+    margin: 0 0 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: #64748b;
+    font-weight: bold;
+  }
+
+  .ticket-code-box {
+    text-align: right;
+  }
+
+  .ticket-code {
+    display: inline-block;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  .details-grid {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 10px;
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+
+  .detail-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 15px;
+    vertical-align: top;
+  }
+
+  .detail-label {
+    display: block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #64748b;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+
+  .detail-value {
+    display: block;
+    font-size: 15px;
+    line-height: 1.35;
+    color: #0f172a;
+    font-weight: 800;
+  }
+
+  .seat-card {
+    background: #fff7ed;
+    border-color: #fed7aa;
+  }
+
+  .seat-card .detail-label {
+    color: #c2410c;
+  }
+
+  .seat-card .detail-value {
+    color: #7c2d12;
+    font-size: 28px;
+  }
+
+  .date-card {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+  }
+
+  .date-card .detail-label {
+    color: #1d4ed8;
+  }
+
+  .date-card .detail-value {
+    color: #1e3a8a;
+  }
+
+  .info-section {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 10px;
+    margin-left: -10px;
+    margin-right: -10px;
+    margin-top: 8px;
+  }
+
+  .info-box {
+    border-radius: 16px;
+    padding: 16px;
+    vertical-align: top;
+  }
+
+  .meeting-box {
+    background: #ecfdf5;
+    border: 1px solid #bbf7d0;
+  }
+
+  .important-box {
+    background: #fdf2f8;
+    border: 1px solid #fbcfe8;
+  }
+
+  .box-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 900;
+    color: #0f172a;
+  }
+
+  .box-text {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #475569;
+  }
+
+  .divider {
+    margin: 24px 0;
+    border-top: 1px dashed #cbd5e1;
+  }
+
+  .boarding-pass {
+    width: 100%;
+    border-collapse: collapse;
+    background: #0f172a;
+    border-radius: 18px;
+    color: #ffffff;
+  }
+
+  .boarding-pass td {
+    padding: 16px;
+    vertical-align: middle;
+  }
+
+  .boarding-label {
+    margin: 0 0 4px;
+    color: #94a3b8;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: bold;
+  }
+
+  .boarding-value {
+    margin: 0;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .boarding-seat {
+    text-align: center;
+    background: #d63384;
+    border-radius: 14px;
+  }
+
+  .boarding-seat .boarding-label,
+  .boarding-seat .boarding-value {
+    color: #ffffff;
+  }
+
+  .footer-note {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+
+  .small-muted {
+    color: #94a3b8;
+    font-size: 10px;
+  }
 </style>
 </head>
+
 <body>
 HTML;
   }
@@ -148,30 +428,135 @@ HTML;
       'UTF-8'
     );
 
+    if ($fullName === '') {
+      $fullName = 'Pasajero RH Experience';
+    }
+
     $date = htmlspecialchars($d['date'] ?? '', ENT_QUOTES, 'UTF-8');
+    $dateLabel = htmlspecialchars($d['date_label'] ?? $date, ENT_QUOTES, 'UTF-8');
     $seatId = htmlspecialchars($d['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
     $email = htmlspecialchars($d['email'] ?? '', ENT_QUOTES, 'UTF-8');
     $phone = htmlspecialchars($d['phone'] ?? '', ENT_QUOTES, 'UTF-8');
+    $index = (int) ($d['index'] ?? 1);
+    $count = (int) ($d['count'] ?? 1);
+    $ticketCode = htmlspecialchars($d['ticket_code'] ?? '', ENT_QUOTES, 'UTF-8');
+
+    $pagebreak = !empty($d['is_last']) ? '' : '<div class="pagebreak"></div>';
 
     return <<<HTML
-<div class="ticket">
-  <div class="header">
-    <div class="brand">RH Experience — Boleto - {$date}</div>
-  </div>
+<div class="page">
+  <div class="ticket-shell">
+    <div class="hero">
+      <table class="hero-table">
+        <tr>
+          <td>
+            <p class="eyebrow">Boleto oficial</p>
+            <h1 class="brand-title">RH Experience</h1>
+            <p class="hero-subtitle">
+              Presenta este boleto y una identificación al abordar.
+            </p>
+          </td>
+          <td align="right" width="190">
+            <span class="status-badge">Reserva confirmada</span>
+          </td>
+        </tr>
+      </table>
+    </div>
 
-  <div class="row">
-    <div class="col">
-      <div class="title">Pasajero: {$fullName}</div>
-      <div class="grid">
-        <div class="item"><div class="label">Asiento</div><div class="value">{$seatId}</div></div>
-        <div class="item"><div class="label">Email</div><div class="value">{$email}</div></div>
-        <div class="item"><div class="label">Teléfono</div><div class="value">{$phone}</div></div>
-      </div>
-      <div class="footer">Por favor, presenta este boleto y una identificación al abordar. Llega 10 minutos antes de la salida.</div>
+    <div class="ticket-body">
+      <table class="passenger-card">
+        <tr>
+          <td>
+            <p class="passenger-label">Pasajero</p>
+            <h2 class="passenger-name">{$fullName}</h2>
+            <p class="small-muted">Boleto {$index} de {$count}</p>
+          </td>
+          <td class="ticket-code-box" width="190">
+            <p class="passenger-label">Código de boleto</p>
+            <span class="ticket-code">{$ticketCode}</span>
+          </td>
+        </tr>
+      </table>
+
+      <table class="details-grid">
+        <tr>
+          <td class="detail-card date-card" width="50%">
+            <span class="detail-label">Fecha del viaje</span>
+            <span class="detail-value">{$dateLabel}</span>
+          </td>
+
+          <td class="detail-card seat-card" width="50%">
+            <span class="detail-label">Asiento</span>
+            <span class="detail-value">{$seatId}</span>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="detail-card" width="50%">
+            <span class="detail-label">Correo</span>
+            <span class="detail-value">{$email}</span>
+          </td>
+
+          <td class="detail-card" width="50%">
+            <span class="detail-label">Teléfono</span>
+            <span class="detail-value">{$phone}</span>
+          </td>
+        </tr>
+      </table>
+
+      <table class="info-section">
+        <tr>
+          <td class="info-box meeting-box" width="50%">
+            <h3 class="box-title">Punto de encuentro</h3>
+            <p class="box-text">
+              Oficinas de Grupo RH.<br>
+              Llega 10 minutos antes de la hora de salida.
+            </p>
+          </td>
+
+          <td class="info-box important-box" width="50%">
+            <h3 class="box-title">Importante</h3>
+            <p class="box-text">
+              Conserva este boleto. Será solicitado al abordar junto con una identificación oficial.
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <div class="divider"></div>
+
+      <table class="boarding-pass">
+        <tr>
+          <td width="28%">
+            <p class="boarding-label">RH Experience</p>
+            <p class="boarding-value">Boarding Pass</p>
+          </td>
+
+          <td width="30%">
+            <p class="boarding-label">Fecha</p>
+            <p class="boarding-value">{$date}</p>
+          </td>
+
+          <td width="22%">
+            <p class="boarding-label">Código</p>
+            <p class="boarding-value">{$ticketCode}</p>
+          </td>
+
+          <td width="20%" class="boarding-seat">
+            <p class="boarding-label">Asiento</p>
+            <p class="boarding-value">{$seatId}</p>
+          </td>
+        </tr>
+      </table>
+
+      <p class="footer-note">
+        Este documento fue generado automáticamente por RH Experience.<br>
+        Para dudas o cambios, comunícate con el equipo de RH Experience.
+      </p>
     </div>
   </div>
 </div>
-<div class="pagebreak"></div>
+{$pagebreak}
 HTML;
   }
 
@@ -230,11 +615,13 @@ HTML;
 <title>Ficha de pago RH Experience</title>
 <style>
   @page { margin: 28pt; }
+
   body {
     font-family: DejaVu Sans, Arial, sans-serif;
     color: #1f2937;
     background: #ffffff;
   }
+
   .header {
     background: #315fa8;
     color: #ffffff;
@@ -242,15 +629,18 @@ HTML;
     border-radius: 14px;
     margin-bottom: 22px;
   }
+
   .brand {
     font-size: 24px;
     font-weight: 800;
     margin-bottom: 6px;
   }
+
   .subtitle {
     font-size: 13px;
     opacity: .9;
   }
+
   .badge {
     display: inline-block;
     background: #fce7f3;
@@ -261,21 +651,25 @@ HTML;
     font-weight: 700;
     margin-bottom: 12px;
   }
+
   .section {
     border: 1px solid #e5e7eb;
     border-radius: 14px;
     padding: 16px;
     margin-bottom: 16px;
   }
+
   .section-title {
     font-size: 15px;
     font-weight: 800;
     margin-bottom: 12px;
     color: #111827;
   }
+
   .grid {
     width: 100%;
   }
+
   .grid td {
     width: 50%;
     padding: 8px;
@@ -283,6 +677,7 @@ HTML;
     border: 1px solid #f1f5f9;
     vertical-align: top;
   }
+
   .label {
     display: block;
     font-size: 10px;
@@ -291,26 +686,31 @@ HTML;
     letter-spacing: .04em;
     margin-bottom: 3px;
   }
+
   .value {
     font-size: 13px;
     font-weight: 700;
     color: #111827;
   }
+
   table.passengers {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
   }
+
   table.passengers th {
     background: #f3f4f6;
     text-align: left;
     padding: 9px;
     border-bottom: 1px solid #e5e7eb;
   }
+
   table.passengers td {
     padding: 9px;
     border-bottom: 1px solid #e5e7eb;
   }
+
   .total-box {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
@@ -318,18 +718,21 @@ HTML;
     padding: 18px;
     text-align: right;
   }
+
   .total-label {
     font-size: 12px;
     color: #1d4ed8;
     font-weight: 700;
     text-transform: uppercase;
   }
+
   .total-amount {
     font-size: 30px;
     color: #1e3a8a;
     font-weight: 900;
     margin-top: 4px;
   }
+
   .instructions {
     background: #fff7ed;
     border: 1px solid #fed7aa;
@@ -338,6 +741,7 @@ HTML;
     font-size: 12px;
     color: #9a3412;
   }
+
   .footer {
     margin-top: 20px;
     font-size: 10px;
@@ -346,6 +750,7 @@ HTML;
   }
 </style>
 </head>
+
 <body>
   <div class="header">
     <div class="brand">RH Experience</div>
@@ -443,6 +848,48 @@ HTML;
 </body>
 </html>
 HTML;
+  }
+
+  private static function formatDateForTicket(string $date): string
+  {
+    if (!$date) {
+      return 'Fecha por confirmar';
+    }
+
+    try {
+      $dt = new \DateTime($date);
+
+      $months = [
+        1 => 'enero',
+        2 => 'febrero',
+        3 => 'marzo',
+        4 => 'abril',
+        5 => 'mayo',
+        6 => 'junio',
+        7 => 'julio',
+        8 => 'agosto',
+        9 => 'septiembre',
+        10 => 'octubre',
+        11 => 'noviembre',
+        12 => 'diciembre',
+      ];
+
+      $day = $dt->format('j');
+      $month = $months[(int) $dt->format('n')] ?? $dt->format('m');
+      $year = $dt->format('Y');
+
+      return "{$day} de {$month} de {$year}";
+    } catch (\Throwable $e) {
+      return $date;
+    }
+  }
+
+  private static function ticketCode(string $date, string $seatId, string $email, int $index): string
+  {
+    $base = $date . '|' . $seatId . '|' . $email . '|' . $index;
+    $hash = strtoupper(substr(hash('sha256', $base), 0, 8));
+
+    return 'RH-' . $hash;
   }
 
   private static function safeFilename(string $value): string
