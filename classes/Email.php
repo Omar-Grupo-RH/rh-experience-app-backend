@@ -67,8 +67,8 @@ class Email
 
       $this->mail->Port = $port;
 
-      $this->mail->CharSet = 'UTF-8';
-      $this->mail->Encoding = 'base64';
+      $this->mail->CharSet = PHPMailer::CHARSET_UTF8;
+      $this->mail->Encoding = PHPMailer::ENCODING_BASE64;
 
       $this->mail->setFrom($from, $fromName);
       $this->mail->addReplyTo($from, $fromName);
@@ -112,6 +112,7 @@ class Email
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Confirmación de reserva - RH Experience</title>

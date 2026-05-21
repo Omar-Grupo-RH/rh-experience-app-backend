@@ -77,8 +77,8 @@ class SurveyEmail
 
     $mail->Port = $port;
 
-    $mail->CharSet = 'UTF-8';
-    $mail->Encoding = 'base64';
+    $mail->CharSet = PHPMailer::CHARSET_UTF8;
+    $mail->Encoding = PHPMailer::ENCODING_BASE64;
 
     $mail->setFrom($from, $fromName);
     $mail->addReplyTo($from, $fromName);
@@ -96,6 +96,7 @@ class SurveyEmail
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Encuesta RH Experience</title>
@@ -130,7 +131,7 @@ class SurveyEmail
               </div>
 
               <h2 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:900;">
-                ¡Hola {$name}!
+                Hola {$name}
               </h2>
 
               <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#475569;">
