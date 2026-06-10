@@ -72,12 +72,7 @@ $router->post('/api/trip/create', [TripController::class, 'store'], true);
 $router->post('/api/trip/update', [TripController::class, 'update'], true);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy'], true);
 
-// $router->get('/api/coupon', [CouponController::class, 'show'], true);
-// $router->post('/api/coupon', [CouponController::class, 'store'], true);
-// $router->post('/api/coupon/update', [CouponController::class, 'update'], true);
-// $router->post('/api/coupon/destroy', [CouponController::class, 'destroy'], true);
-
-$router->get('/api/travels', [DashboardController::class, 'getTravels'], true);
+$router->get('/api/travels', [DashboardController::class, 'getTravels'], false);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 $router->get('/api/admin/dashboard', [DashboardController::class, 'index']);
 
@@ -92,6 +87,7 @@ $router->post('/api/comments/create', [CommentsController::class, 'store']);
 $router->get('/api/comments', [CommentsController::class, 'index']);
 
 $router->post('/api/reservation', [ReservationController::class, 'store']);
+$router->get('/api/passengerVerifyEmail', [ReservationController::class, 'passengerVerifyEmail']);
 
 $router->get('/api/codes', [CodesController::class, 'index']);
 $router->get('/api/code', [CodesController::class, 'show']);

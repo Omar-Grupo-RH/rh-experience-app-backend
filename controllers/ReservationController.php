@@ -7,9 +7,10 @@ use Classes\Email;
 use Classes\TicketPdfService;
 use Model\ActiveRecord;
 use Model\Order;
+use Model\ReservationRegistration;
 use Model\Ticket;
 use Model\TicketPassenger;
-use Model\ReservationRegistration;
+use Model\TripPassenger;
 
 class ReservationController
 {
@@ -77,7 +78,7 @@ class ReservationController
                 return;
             }
 
-            self::decreaseAvailableSeats($db, $tripId, $numPassengers);
+            self::ensureSeatsAreAvailable($db, $tripId, $seats, $numPassengers);
 
             $ticket = new Ticket([
                 'trip_id' => $tripId,
@@ -133,10 +134,13 @@ class ReservationController
                 throw new \Exception('Error al generar la orden de compra.');
             }
 
+            $payment = self::calculateReservationCost($payload);
+
             $response = [
                 'success' => true,
                 'message' => 'Reservación completada exitosamente.',
-                'ticket_id' => $ticket->id
+                'ticket_id' => $ticket->id,
+                'payment' => $payment
             ];
 
             self::completeIdempotencyKey(
@@ -191,6 +195,68 @@ class ReservationController
         }
     }
 
+    public static function passengerVerifyEmail()
+    {
+        try {
+            $emailPassenger = trim($_GET['email'] ?? '');
+
+            if (!$emailPassenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El email del pasajero es obligatorio',
+                ], 422);
+
+                return;
+            }
+
+            if (!filter_var($emailPassenger, FILTER_VALIDATE_EMAIL)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El email del pasajero no es válido',
+                ], 422);
+
+                return;
+            }
+
+            $passenger = TripPassenger::where('email', $emailPassenger);
+
+            if ($passenger) {
+                JsonResponse::send([
+                    'success' => true,
+                    'exists' => true,
+                    'message' => 'Este pasajero ya ha sido registrado anteriormente.',
+                    'passenger' => [
+                        'id' => $passenger->id ?? null,
+                        'first_name' => $passenger->first_name ?? '',
+                        'last_name' => $passenger->last_name ?? '',
+                        'email' => $passenger->email ?? '',
+                        'phone' => $passenger->phone ?? '',
+                    ],
+                ], 200);
+
+                return;
+            }
+
+            JsonResponse::send([
+                'success' => true,
+                'exists' => false,
+                'message' => 'Este pasajero aún no ha sido registrado.',
+                'passenger' => null,
+            ], 200);
+
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error validando email del pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al validar el email del pasajero.',
+            ], 500);
+
+            return;
+        }
+    }
+
     private static function readBody(): array
     {
         $payload = $_POST;
@@ -231,6 +297,21 @@ class ReservationController
             throw new \InvalidArgumentException('El tipo de registro es obligatorio.');
         }
 
+        $allowedRegistrationTypes = [
+            'internal',
+            'alliance',
+            'investor',
+            'prospect',
+            'prize',
+            'family_friend'
+        ];
+
+        $registrationType = $payload['RegistrationType']['registration_type'];
+
+        if (!in_array($registrationType, $allowedRegistrationTypes, true)) {
+            throw new \InvalidArgumentException('El tipo de registro no es válido.');
+        }
+
         if (empty($payload['passengers']) || !is_array($payload['passengers'])) {
             throw new \InvalidArgumentException('Debes agregar al menos un pasajero.');
         }
@@ -251,6 +332,16 @@ class ReservationController
             if (empty(trim($p['phone'] ?? ''))) {
                 throw new \InvalidArgumentException('El teléfono del pasajero es obligatorio.');
             }
+        }
+
+        $passengersCount = count($payload['passengers']);
+
+        if (in_array($registrationType, ['investor', 'prize'], true) && $passengersCount > 2) {
+            throw new \InvalidArgumentException('Este tipo de registro permite máximo 2 pasajeros.');
+        }
+
+        if (!in_array($registrationType, ['investor', 'prize'], true) && $passengersCount > 1) {
+            throw new \InvalidArgumentException('Este tipo de registro permite máximo 1 pasajero.');
         }
     }
 
@@ -376,24 +467,137 @@ class ReservationController
         $stmt->execute();
     }
 
-    private static function decreaseAvailableSeats(
+    private static function ensureSeatsAreAvailable(
         \mysqli $db,
         int $tripId,
+        array $seats,
         int $numPassengers
     ): void {
         $stmt = $db->prepare("
-            UPDATE trips
-            SET total_seats = total_seats - ?
+            SELECT total_seats
+            FROM trips
             WHERE id = ?
-            AND total_seats >= ?
+            FOR UPDATE
         ");
 
-        $stmt->bind_param('iii', $numPassengers, $tripId, $numPassengers);
+        $stmt->bind_param('i', $tripId);
         $stmt->execute();
 
-        if ($stmt->affected_rows === 0) {
+        $result = $stmt->get_result();
+        $trip = $result->fetch_assoc();
+
+        if (!$trip) {
+            throw new \InvalidArgumentException('El viaje seleccionado no existe.');
+        }
+
+        $totalSeats = (int) ($trip['total_seats'] ?? 15);
+
+        if ($totalSeats <= 0) {
+            $totalSeats = 15;
+        }
+
+        $stmt = $db->prepare("
+            SELECT COUNT(*) AS reserved_count
+            FROM ticket_passengers
+            WHERE trip_id = ?
+        ");
+
+        $stmt->bind_param('i', $tripId);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $reserved = $result->fetch_assoc();
+
+        $reservedCount = (int) ($reserved['reserved_count'] ?? 0);
+        $availableSeats = $totalSeats - $reservedCount;
+
+        if ($availableSeats < $numPassengers) {
             throw new \InvalidArgumentException('Lo sentimos, ya no hay asientos disponibles para este viaje.');
         }
+
+        if (!empty($seats)) {
+            $placeholders = implode(',', array_fill(0, count($seats), '?'));
+            $types = 'i' . str_repeat('s', count($seats));
+            $params = array_merge([$tripId], $seats);
+
+            $query = "
+                SELECT seat_id
+                FROM ticket_passengers
+                WHERE trip_id = ?
+                AND seat_id IN ($placeholders)
+                LIMIT 1
+            ";
+
+            $stmt = $db->prepare($query);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                throw new \InvalidArgumentException('Uno o más asientos ya fueron reservados. Por favor selecciona otros.');
+            }
+        }
+    }
+
+    private static function calculateReservationCost(array $payload): array
+    {
+        $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
+        $passengers = $payload['passengers'] ?? [];
+        $ticketsCount = count($passengers);
+
+        $paidTicketsCount = 0;
+        $pricePerTicket = 0;
+        $paymentReason = '';
+
+        if ($registrationType === 'prospect') {
+            $paidTicketsCount = $ticketsCount;
+            $pricePerTicket = 1500;
+            $paymentReason = 'Cliente prospecto';
+        }
+
+        if ($registrationType === 'family_friend') {
+            $paidTicketsCount = $ticketsCount;
+            $pricePerTicket = 500;
+            $paymentReason = 'Familiares y amigos';
+        }
+
+        if ($registrationType === 'investor') {
+            $paidTicketsCount = max(0, $ticketsCount - 1);
+            $pricePerTicket = 500;
+            $paymentReason = 'Invitado extra de inversionista';
+        }
+
+        if ($registrationType === 'internal') {
+            foreach ($passengers as $passenger) {
+                $email = trim($passenger['email'] ?? '');
+
+                if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    continue;
+                }
+
+                $existingPassenger = TripPassenger::where('email', $email);
+
+                if ($existingPassenger) {
+                    $paidTicketsCount = $ticketsCount;
+                    $pricePerTicket = 500;
+                    $paymentReason = 'Segunda visita de personal interno';
+                    break;
+                }
+            }
+        }
+
+        $totalAmount = $paidTicketsCount * $pricePerTicket;
+
+        return [
+            'requires_payment' => $totalAmount > 0,
+            'tickets_count' => $ticketsCount,
+            'paid_tickets_count' => $paidTicketsCount,
+            'free_tickets_count' => max(0, $ticketsCount - $paidTicketsCount),
+            'price_per_ticket' => $pricePerTicket,
+            'total_amount' => $totalAmount,
+            'payment_reason' => $paymentReason,
+        ];
     }
 
     private static function saveReservationRegistration(
@@ -500,21 +704,20 @@ class ReservationController
                 $email->addAttachment($ticketsPdfPath, 'boletos-rh.pdf');
             }
 
-            $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
+            $payment = self::calculateReservationCost($payload);
 
-            if ($registrationType === 'prospect') {
-                $pricePerTicket = 800;
-                $ticketsCount = count($payload['passengers']);
-                $totalAmount = $ticketsCount * $pricePerTicket;
-
+            if ($payment['requires_payment']) {
                 $paymentPdfPath = TicketPdfService::buildPaymentSlipPdf([
                     'client_name' => $ticketsName,
                     'client_email' => $emailTo,
                     'trip_date' => $tripDate,
                     'seats' => $seatNumbers,
-                    'tickets_count' => $ticketsCount,
-                    'price_per_ticket' => $pricePerTicket,
-                    'total_amount' => $totalAmount,
+                    'tickets_count' => $payment['tickets_count'],
+                    'paid_tickets_count' => $payment['paid_tickets_count'],
+                    'free_tickets_count' => $payment['free_tickets_count'],
+                    'price_per_ticket' => $payment['price_per_ticket'],
+                    'total_amount' => $payment['total_amount'],
+                    'payment_reason' => $payment['payment_reason'],
                     'passengers' => $payload['passengers'],
                     'registration' => $payload['RegistrationType'] ?? [],
                 ]);

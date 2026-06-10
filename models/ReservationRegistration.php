@@ -99,7 +99,8 @@ class ReservationRegistration extends ActiveRecord
             'alliance',
             'prize',
             'investor',
-            'prospect'
+            'prospect',
+            'family_friend'
         ];
 
         if (!$this->ticket_id) {

@@ -9,7 +9,8 @@ use Model\TripPassenger;
 
 class DashboardController
 {
-    private const PROSPECT_PRICE = 800;
+    private const PROSPECT_PRICE = 1500;
+    private const RECOVERY_PRICE = 500;
 
     public static function index()
     {
@@ -47,29 +48,116 @@ class DashboardController
         }
     }
 
+    private static function paymentAmountCaseSql(): string
+    {
+        $prospectPrice = self::PROSPECT_PRICE;
+        $recoveryPrice = self::RECOVERY_PRICE;
+
+        return "
+            CASE
+                WHEN rr.registration_type = 'prospect' THEN {$prospectPrice}
+
+                WHEN rr.registration_type = 'family_friend' THEN {$recoveryPrice}
+
+                WHEN rr.registration_type = 'investor'
+                    AND tp.id <> (
+                        SELECT MIN(tp_inv.id)
+                        FROM ticket_passengers tp_inv
+                        WHERE tp_inv.ticket_id = tp.ticket_id
+                    )
+                THEN {$recoveryPrice}
+
+                WHEN rr.registration_type = 'internal'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM ticket_passengers tp_prev
+                        WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                        AND tp_prev.id < tp.id
+                        LIMIT 1
+                    )
+                THEN {$recoveryPrice}
+
+                ELSE 0
+            END
+        ";
+    }
+
+    private static function paidPassengerCaseSql(): string
+    {
+        $paymentAmountCase = self::paymentAmountCaseSql();
+
+        return "
+            CASE
+                WHEN ({$paymentAmountCase}) > 0 THEN 1
+                ELSE 0
+            END
+        ";
+    }
+
     private static function getNextExperience(): ?array
     {
         $db = ActiveRecord::getDB();
+
+        $paymentAmountCase = self::paymentAmountCaseSql();
+        $paidPassengerCase = self::paidPassengerCaseSql();
 
         $query = "
             SELECT 
                 t.id,
                 t.title,
                 t.trip_date,
-                t.total_seats AS available_seats,
+                t.total_seats AS total_capacity,
+
                 COUNT(tp.id) AS registered_passengers,
+
+                GREATEST(t.total_seats - COUNT(tp.id), 0) AS available_seats,
+
                 SUM(
                     CASE 
                         WHEN rr.registration_type = 'prospect' THEN 1 
                         ELSE 0 
                     END
                 ) AS prospect_passengers,
+
                 SUM(
                     CASE 
-                        WHEN rr.registration_type = 'prospect' THEN ? 
+                        WHEN rr.registration_type = 'family_friend' THEN 1 
                         ELSE 0 
                     END
-                ) AS estimated_revenue
+                ) AS family_friend_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'investor'
+                            AND tp.id <> (
+                                SELECT MIN(tp_inv.id)
+                                FROM ticket_passengers tp_inv
+                                WHERE tp_inv.ticket_id = tp.ticket_id
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS investor_extra_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'internal'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM ticket_passengers tp_prev
+                                WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                                AND tp_prev.id < tp.id
+                                LIMIT 1
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS internal_second_visit_passengers,
+
+                SUM({$paidPassengerCase}) AS paid_passengers,
+
+                SUM({$paymentAmountCase}) AS estimated_revenue
+
             FROM trips t
             LEFT JOIN ticket_passengers tp
                 ON tp.trip_id = t.id
@@ -81,18 +169,12 @@ class DashboardController
             LIMIT 1
         ";
 
-        $price = self::PROSPECT_PRICE;
+        $result = $db->query($query);
 
-        $stmt = $db->prepare($query);
-
-        if (!$stmt) {
-            throw new \Exception('Error preparando próxima experiencia: ' . $db->error);
+        if (!$result) {
+            throw new \Exception('Error obteniendo próxima experiencia: ' . $db->error);
         }
 
-        $stmt->bind_param('i', $price);
-        $stmt->execute();
-
-        $result = $stmt->get_result();
         $row = $result->fetch_assoc();
 
         if (!$row) {
@@ -100,20 +182,28 @@ class DashboardController
         }
 
         $registered = (int) ($row['registered_passengers'] ?? 0);
+        $capacity = (int) ($row['total_capacity'] ?? 15);
         $available = (int) ($row['available_seats'] ?? 0);
-        $capacity = $registered + $available;
 
         return [
             'id' => (int) $row['id'],
             'title' => $row['title'],
             'trip_date' => $row['trip_date'],
+
             'registered_passengers' => $registered,
             'available_seats' => $available,
             'total_capacity' => $capacity,
+
             'occupancy_percentage' => $capacity > 0
                 ? round(($registered / $capacity) * 100, 2)
                 : 0,
+
             'prospect_passengers' => (int) ($row['prospect_passengers'] ?? 0),
+            'family_friend_passengers' => (int) ($row['family_friend_passengers'] ?? 0),
+            'investor_extra_passengers' => (int) ($row['investor_extra_passengers'] ?? 0),
+            'internal_second_visit_passengers' => (int) ($row['internal_second_visit_passengers'] ?? 0),
+            'paid_passengers' => (int) ($row['paid_passengers'] ?? 0),
+
             'estimated_revenue' => (float) ($row['estimated_revenue'] ?? 0),
         ];
     }
@@ -121,49 +211,91 @@ class DashboardController
     private static function getSummary(int $days): array
     {
         $db = ActiveRecord::getDB();
-        $price = self::PROSPECT_PRICE;
+
+        $paymentAmountCase = self::paymentAmountCaseSql();
+        $paidPassengerCase = self::paidPassengerCaseSql();
 
         $query = "
             SELECT
                 COUNT(tp.id) AS total_passengers,
                 COUNT(DISTINCT tp.ticket_id) AS total_reservations,
+
                 SUM(
                     CASE 
                         WHEN rr.registration_type = 'prospect' THEN 1 
                         ELSE 0 
                     END
                 ) AS prospect_passengers,
+
                 SUM(
                     CASE 
-                        WHEN rr.registration_type = 'prospect' THEN ?
+                        WHEN rr.registration_type = 'family_friend' THEN 1 
                         ELSE 0 
                     END
-                ) AS estimated_revenue
+                ) AS family_friend_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'investor'
+                            AND tp.id <> (
+                                SELECT MIN(tp_inv.id)
+                                FROM ticket_passengers tp_inv
+                                WHERE tp_inv.ticket_id = tp.ticket_id
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS investor_extra_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'internal'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM ticket_passengers tp_prev
+                                WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                                AND tp_prev.id < tp.id
+                                LIMIT 1
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS internal_second_visit_passengers,
+
+                SUM({$paidPassengerCase}) AS paid_passengers,
+
+                SUM({$paymentAmountCase}) AS estimated_revenue
+
             FROM ticket_passengers tp
             LEFT JOIN reservation_registrations rr
                 ON rr.ticket_passenger_id = tp.id
             WHERE tp.created_at >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
         ";
 
-        $stmt = $db->prepare($query);
+        $result = $db->query($query);
 
-        if (!$stmt) {
+        if (!$result) {
             throw new \Exception('Error preparando resumen: ' . $db->error);
         }
 
-        $stmt->bind_param('i', $price);
-        $stmt->execute();
-
-        $result = $stmt->get_result();
         $row = $result->fetch_assoc() ?: [];
 
         return [
             'days' => $days,
+
             'total_passengers' => (int) ($row['total_passengers'] ?? 0),
             'total_reservations' => (int) ($row['total_reservations'] ?? 0),
+
             'prospect_passengers' => (int) ($row['prospect_passengers'] ?? 0),
+            'family_friend_passengers' => (int) ($row['family_friend_passengers'] ?? 0),
+            'investor_extra_passengers' => (int) ($row['investor_extra_passengers'] ?? 0),
+            'internal_second_visit_passengers' => (int) ($row['internal_second_visit_passengers'] ?? 0),
+            'paid_passengers' => (int) ($row['paid_passengers'] ?? 0),
+
             'estimated_revenue' => (float) ($row['estimated_revenue'] ?? 0),
+
             'prospect_price' => self::PROSPECT_PRICE,
+            'recovery_price' => self::RECOVERY_PRICE,
         ];
     }
 
@@ -173,21 +305,59 @@ class DashboardController
 
         $query = "
             SELECT
-                tp.created_at AS date,
+                DATE(tp.created_at) AS date,
+
                 COUNT(tp.id) AS passengers,
                 COUNT(DISTINCT tp.ticket_id) AS reservations,
+
                 SUM(
                     CASE 
                         WHEN rr.registration_type = 'prospect' THEN 1 
                         ELSE 0 
                     END
-                ) AS prospects
+                ) AS prospects,
+
+                SUM(
+                    CASE 
+                        WHEN rr.registration_type = 'family_friend' THEN 1 
+                        ELSE 0 
+                    END
+                ) AS family_friends,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'investor'
+                            AND tp.id <> (
+                                SELECT MIN(tp_inv.id)
+                                FROM ticket_passengers tp_inv
+                                WHERE tp_inv.ticket_id = tp.ticket_id
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS investor_extras,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'internal'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM ticket_passengers tp_prev
+                                WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                                AND tp_prev.id < tp.id
+                                LIMIT 1
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS internal_second_visits
+
             FROM ticket_passengers tp
             LEFT JOIN reservation_registrations rr
                 ON rr.ticket_passenger_id = tp.id
             WHERE tp.created_at >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
-            GROUP BY tp.created_at
-            ORDER BY tp.created_at ASC
+            GROUP BY DATE(tp.created_at)
+            ORDER BY DATE(tp.created_at) ASC
         ";
 
         $result = $db->query($query);
@@ -203,7 +373,11 @@ class DashboardController
                 'date' => $row['date'],
                 'passengers' => (int) $row['passengers'],
                 'reservations' => (int) $row['reservations'],
-                'prospects' => (int) $row['prospects'],
+
+                'prospects' => (int) ($row['prospects'] ?? 0),
+                'family_friends' => (int) ($row['family_friends'] ?? 0),
+                'investor_extras' => (int) ($row['investor_extras'] ?? 0),
+                'internal_second_visits' => (int) ($row['internal_second_visits'] ?? 0),
             ];
         }
 
@@ -213,48 +387,86 @@ class DashboardController
     private static function getRevenueTrend(int $days): array
     {
         $db = ActiveRecord::getDB();
-        $price = self::PROSPECT_PRICE;
+
+        $paymentAmountCase = self::paymentAmountCaseSql();
+        $paidPassengerCase = self::paidPassengerCaseSql();
 
         $query = "
             SELECT
-                tp.created_at AS date,
+                DATE(tp.created_at) AS date,
+
                 SUM(
                     CASE 
                         WHEN rr.registration_type = 'prospect' THEN 1 
                         ELSE 0 
                     END
                 ) AS prospect_passengers,
+
                 SUM(
                     CASE 
-                        WHEN rr.registration_type = 'prospect' THEN ?
+                        WHEN rr.registration_type = 'family_friend' THEN 1 
                         ELSE 0 
                     END
-                ) AS estimated_revenue
+                ) AS family_friend_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'investor'
+                            AND tp.id <> (
+                                SELECT MIN(tp_inv.id)
+                                FROM ticket_passengers tp_inv
+                                WHERE tp_inv.ticket_id = tp.ticket_id
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS investor_extra_passengers,
+
+                SUM(
+                    CASE
+                        WHEN rr.registration_type = 'internal'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM ticket_passengers tp_prev
+                                WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                                AND tp_prev.id < tp.id
+                                LIMIT 1
+                            )
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS internal_second_visit_passengers,
+
+                SUM({$paidPassengerCase}) AS paid_passengers,
+
+                SUM({$paymentAmountCase}) AS estimated_revenue
+
             FROM ticket_passengers tp
             LEFT JOIN reservation_registrations rr
                 ON rr.ticket_passenger_id = tp.id
             WHERE tp.created_at >= DATE_SUB(CURDATE(), INTERVAL {$days} DAY)
-            GROUP BY tp.created_at
-            ORDER BY tp.created_at ASC
+            GROUP BY DATE(tp.created_at)
+            ORDER BY DATE(tp.created_at) ASC
         ";
 
-        $stmt = $db->prepare($query);
+        $result = $db->query($query);
 
-        if (!$stmt) {
+        if (!$result) {
             throw new \Exception('Error preparando ingresos por día: ' . $db->error);
         }
-
-        $stmt->bind_param('i', $price);
-        $stmt->execute();
-
-        $result = $stmt->get_result();
 
         $items = [];
 
         while ($row = $result->fetch_assoc()) {
             $items[] = [
                 'date' => $row['date'],
+
                 'prospect_passengers' => (int) ($row['prospect_passengers'] ?? 0),
+                'family_friend_passengers' => (int) ($row['family_friend_passengers'] ?? 0),
+                'investor_extra_passengers' => (int) ($row['investor_extra_passengers'] ?? 0),
+                'internal_second_visit_passengers' => (int) ($row['internal_second_visit_passengers'] ?? 0),
+                'paid_passengers' => (int) ($row['paid_passengers'] ?? 0),
+
                 'estimated_revenue' => (float) ($row['estimated_revenue'] ?? 0),
             ];
         }
@@ -403,6 +615,8 @@ class DashboardController
     {
         $db = ActiveRecord::getDB();
 
+        $paymentAmountCase = self::paymentAmountCaseSql();
+
         $query = "
             SELECT
                 tp.id,
@@ -413,7 +627,8 @@ class DashboardController
                 tp.created_at,
                 t.title AS trip_title,
                 t.trip_date,
-                rr.registration_type
+                rr.registration_type,
+                {$paymentAmountCase} AS estimated_amount
             FROM ticket_passengers tp
             INNER JOIN trips t
                 ON t.id = tp.trip_id
@@ -432,6 +647,7 @@ class DashboardController
         $items = [];
 
         while ($row = $result->fetch_assoc()) {
+            $row['estimated_amount'] = (float) ($row['estimated_amount'] ?? 0);
             $items[] = $row;
         }
 
@@ -469,13 +685,14 @@ class DashboardController
 
         return $items;
     }
-    
+
     public static function getTravels()
     {
         $travels = Trip::allWithPassengersCount('ASC');
+
         JsonResponse::send([
             'success' => true,
-            'data'    => $travels,
+            'data' => $travels,
         ], 200);
     }
 

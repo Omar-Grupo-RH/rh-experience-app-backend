@@ -42,11 +42,65 @@ class TripController
 
     public static function index()
     {
-        $trips = Trip::all();
+        $db = ActiveRecord::getDB();
+
+        $query = "
+        SELECT
+            t.id,
+            t.title,
+            t.trip_date,
+
+            COALESCE(t.total_seats, 15) AS total_seats,
+
+            COUNT(tp.id) AS unavaible_seats,
+
+            COUNT(tp.id) AS passengers_count,
+
+            GREATEST(COALESCE(t.total_seats, 15) - COUNT(tp.id), 0) AS avaible_seats
+
+        FROM trips t
+
+        LEFT JOIN ticket_passengers tp
+            ON tp.trip_id = t.id
+
+        GROUP BY
+            t.id,
+            t.title,
+            t.trip_date,
+            t.total_seats
+
+        ORDER BY t.trip_date ASC
+    ";
+
+        $result = $db->query($query);
+
+        if (!$result) {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'No se pudieron cargar los RH Experience.',
+            ], 500);
+
+            return;
+        }
+
+        $trips = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $trips[] = [
+                'id' => (int) $row['id'],
+                'title' => $row['title'],
+                'trip_date' => $row['trip_date'],
+
+                'total_seats' => (int) $row['total_seats'],
+                'unavaible_seats' => (int) $row['unavaible_seats'],
+                'passengers_count' => (int) $row['passengers_count'],
+                'avaible_seats' => (int) $row['avaible_seats'],
+            ];
+        }
 
         JsonResponse::send([
             'success' => true,
-            'data'    => $trips,
+            'data' => $trips,
         ], 200);
     }
 
@@ -78,17 +132,36 @@ class TripController
 
         foreach ($ticketsByTrip as $ticket) {
             $seatNumbersArray = json_decode($ticket->seat_numbers, true) ?? [];
-            $seatsLocation = array_merge($seatsLocation, $seatNumbersArray);
+
+            if (is_array($seatNumbersArray)) {
+                $seatsLocation = array_merge($seatsLocation, $seatNumbersArray);
+            }
         }
+
+        $seatsLocation = array_values(array_unique($seatsLocation));
+
+        $totalSeats = (int) ($trip->total_seats ?? 15);
+
+        if ($totalSeats <= 0) {
+            $totalSeats = 15;
+        }
+
+        $reservedSeats = count($seatsLocation);
+        $availableSeats = max(0, $totalSeats - $reservedSeats);
 
         JsonResponse::send([
             'success' => true,
             'data' => [
-                'trip_id'         => (int) $trip->id,
-                'title'           => $trip->title,
-                'trip_date'       => $trip->trip_date,
-                'total_seats'     => (int) $trip->total_seats,
-                'seats_location'  => $seatsLocation,
+                'trip_id'          => (int) $trip->id,
+                'id'               => (int) $trip->id,
+                'title'            => $trip->title,
+                'trip_date'        => $trip->trip_date,
+
+                'total_seats'      => $totalSeats,
+                'unavaible_seats'  => $reservedSeats,
+                'avaible_seats'    => $availableSeats,
+
+                'seats_location'   => $seatsLocation,
             ],
         ], 200);
     }
