@@ -105,55 +105,61 @@ class TripPassenger extends ActiveRecord
         $this->title = $args['title'] ?? '';
     }
 
-    public static function allPassengersWithRegistrationByTrip($tripId): array
+    public static function allPassengersWithRegistrationByTrip(int $tripId): array
     {
         $db = self::getDB();
 
         $query = "
-            SELECT 
-                tp.id,
-                tp.ticket_id,
-                tp.trip_id,
-                tp.seat_id,
-                tp.first_name,
-                tp.last_name,
-                tp.email,
-                tp.phone,
-                tp.born_date,
-                tp.allergies,
-                tp.health_conditions,    
-                tp.created_at,
+        SELECT 
+            tp.id,
+            tp.ticket_id,
+            tp.trip_id,
 
-                rr.id AS registration_id,
-                rr.registration_type,
-                rr.area_code,
-                rr.alliance_name,
-                rr.alliance_code,
-                rr.prize_code,
-                rr.development,
-                rr.stage,
-                rr.lot_number,
-                rr.advisor_name,
-                rr.advisor_code,
-                rr.origin,
-                rr.origin_alliance_name,
-                rr.created_at AS registration_created_at,
+            tp.ticket_code,
+            tp.payment_status,
+            tp.paid_at,
+            tp.paid_by,
 
-                t.trip_date,
-                t.title
+            tp.seat_id,
+            tp.first_name,
+            tp.last_name,
+            tp.email,
+            tp.phone,
+            tp.born_date,
+            tp.allergies,
+            tp.health_conditions,    
+            tp.created_at,
 
-            FROM ticket_passengers tp
+            rr.id AS registration_id,
+            rr.registration_type,
+            rr.area_code,
+            rr.alliance_name,
+            rr.alliance_code,
+            rr.prize_code,
+            rr.development,
+            rr.stage,
+            rr.lot_number,
+            rr.advisor_name,
+            rr.advisor_code,
+            rr.origin,
+            rr.origin_alliance_name,
+            rr.created_at AS registration_created_at,
 
-            LEFT JOIN reservation_registrations rr
-                ON rr.ticket_passenger_id = tp.id
+            t.trip_date,
+            t.title
 
-            LEFT JOIN trips t
-                ON t.id = tp.trip_id
+        FROM ticket_passengers tp
 
-            WHERE tp.trip_id = ?
+        LEFT JOIN reservation_registrations rr
+            ON rr.ticket_passenger_id = tp.id
 
-            ORDER BY tp.seat_id ASC
-        ";
+        LEFT JOIN trips t
+            ON t.id = tp.trip_id
+
+        WHERE tp.trip_id = ?
+
+        ORDER BY tp.seat_id ASC
+    ";
 
         $stmt = $db->prepare($query);
 
@@ -171,6 +177,15 @@ class TripPassenger extends ActiveRecord
         $passengers = [];
 
         while ($row = $result->fetch_assoc()) {
+            $row['id'] = (int) $row['id'];
+            $row['ticket_id'] = (int) $row['ticket_id'];
+            $row['trip_id'] = (int) $row['trip_id'];
+
+            $row['ticket_code'] = $row['ticket_code'] ?? null;
+            $row['payment_status'] = $row['payment_status'] ?? 'free';
+            $row['paid_at'] = $row['paid_at'] ?? null;
+            $row['paid_by'] = $row['paid_by'] ?? null;
+
             $passengers[] = $row;
         }
 

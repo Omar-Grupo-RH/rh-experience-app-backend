@@ -71,6 +71,7 @@ $router->post('/api/users/destroy', [ClientController::class, 'destroy'], true);
 $router->post('/api/trip/create', [TripController::class, 'store'], true);
 $router->post('/api/trip/update', [TripController::class, 'update'], true);
 $router->post('/api/trip/destroy', [TripController::class, 'destroy'], true);
+$router->post('/api/passenger-payment', [TripController::class, 'confirmPassengerPayment'], true);
 
 $router->get('/api/travels', [DashboardController::class, 'getTravels'], false);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);

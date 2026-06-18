@@ -8,6 +8,7 @@ use Classes\Email;
 use Classes\TicketPdfService;
 use Model\ActiveRecord;
 use Model\Ticket;
+use Model\TicketPassenger;
 use Model\Trip;
 use Throwable;
 
@@ -400,6 +401,62 @@ class TripController
             'success' => true,
             'message' => 'RH EXPERIENCE eliminado correctamente',
         ], 200);
+    }
+
+    public static function confirmPassengerPayment()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido',
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = json_decode(file_get_contents('php://input'), true) ?? [];
+
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+
+            if (!$passengerId) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Falta el ID del pasajero.',
+                ], 422);
+                return;
+            }
+
+            $payment = TicketPassenger::confirmPayment($passengerId);
+
+            if (!$payment) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.',
+                ], 404);
+                return;
+            }
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Pago confirmado correctamente.',
+                'data' => $payment,
+            ], 200);
+            return;
+        } catch (\Exception $e) {
+            JsonResponse::send([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error confirmando pago de pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al confirmar el pago.',
+            ], 500);
+            return;
+        }
     }
 
     private static function tripDateExistsForAnotherTrip(string $tripDate, int $currentTripId): bool

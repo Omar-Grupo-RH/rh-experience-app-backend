@@ -93,12 +93,26 @@ class ReservationController
 
             $ticket->id = (int) $resTicket['id'];
 
+            $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
+
             foreach ($payload['passengers'] as $index => $p) {
                 $seatId = $seats[$index];
+
+                $ticketCode = TicketPassenger::generateUniqueTicketCode();
+
+                $paymentStatus = TicketPassenger::resolvePaymentStatus(
+                    $registrationType,
+                    $index,
+                    $p
+                );
 
                 $passenger = new TicketPassenger([
                     'ticket_id'  => $ticket->id,
                     'trip_id'    => $tripId,
+                    'ticket_code' => $ticketCode,
+                    'payment_status' => $paymentStatus,
+                    'paid_at' => null,
+                    'paid_by' => null,
                     'seat_id'    => $seatId,
                     'first_name' => trim($p['first_name'] ?? ''),
                     'last_name'  => trim($p['last_name'] ?? ''),
