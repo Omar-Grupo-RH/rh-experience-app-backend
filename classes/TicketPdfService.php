@@ -7,9 +7,6 @@ use Dompdf\Options;
 
 class TicketPdfService
 {
-  /**
-   * Genera un solo PDF con una página por pasajero.
-   */
   public static function buildTicketsPdf(array $payload, string $outputDir = '../public/tickets'): string
   {
     if (!is_dir($outputDir)) {
@@ -27,6 +24,7 @@ class TicketPdfService
 
     foreach ($passengers as $idx => $pax) {
       $seatId = $pax['seat_id'] ?? ($seats[$idx] ?? '');
+      $ticketCode = trim($pax['ticket_code'] ?? '') ?: 'SIN-CODIGO';
 
       $html .= self::ticketPageHtml([
         'date' => $date,
@@ -38,7 +36,7 @@ class TicketPdfService
         'phone' => $pax['phone'] ?? '',
         'index' => $idx + 1,
         'count' => $totalPassengers,
-        'ticket_code' => self::ticketCode($date, $seatId, $pax['email'] ?? '', $idx),
+        'ticket_code' => $ticketCode,
         'is_last' => ($idx + 1) === $totalPassengers,
       ]);
     }
@@ -68,9 +66,6 @@ class TicketPdfService
     return $filename;
   }
 
-  /**
-   * Genera ficha de pago para prospectos.
-   */
   public static function buildPaymentSlipPdf(array $payload, string $outputDir = '../public/tickets'): string
   {
     if (!is_dir($outputDir)) {
@@ -82,8 +77,8 @@ class TicketPdfService
     $tripDate = $payload['trip_date'] ?? '';
     $seats = $payload['seats'] ?? [];
     $ticketsCount = (int) ($payload['tickets_count'] ?? 1);
-    $pricePerTicket = (float) ($payload['price_per_ticket'] ?? 800);
-    $totalAmount = (float) ($payload['total_amount'] ?? ($ticketsCount * $pricePerTicket));
+    $pricePerTicket = (float) ($payload['price_per_ticket'] ?? 0);
+    $totalAmount = (float) ($payload['total_amount'] ?? 0);
     $passengers = $payload['passengers'] ?? [];
     $registration = $payload['registration'] ?? [];
 
@@ -439,7 +434,7 @@ HTML;
     $phone = htmlspecialchars($d['phone'] ?? '', ENT_QUOTES, 'UTF-8');
     $index = (int) ($d['index'] ?? 1);
     $count = (int) ($d['count'] ?? 1);
-    $ticketCode = htmlspecialchars($d['ticket_code'] ?? '', ENT_QUOTES, 'UTF-8');
+    $ticketCode = htmlspecialchars($d['ticket_code'] ?? 'SIN-CODIGO', ENT_QUOTES, 'UTF-8');
 
     $pagebreak = !empty($d['is_last']) ? '' : '<div class="pagebreak"></div>';
 
@@ -573,10 +568,9 @@ HTML;
     $seats = htmlspecialchars($seats, ENT_QUOTES, 'UTF-8');
 
     $ticketsCount = (int) ($d['tickets_count'] ?? 1);
-    $pricePerTicket = (float) ($d['price_per_ticket'] ?? 800);
-    $totalAmount = (float) ($d['total_amount'] ?? ($ticketsCount * $pricePerTicket));
+    $pricePerTicket = (float) ($d['price_per_ticket'] ?? 0);
+    $totalAmount = (float) ($d['total_amount'] ?? 0);
 
-    $priceFormatted = '$' . number_format($pricePerTicket, 2) . ' MXN';
     $totalFormatted = '$' . number_format($totalAmount, 2) . ' MXN';
 
     $registration = $d['registration'] ?? [];
@@ -596,13 +590,22 @@ HTML;
       );
 
       $seatId = htmlspecialchars($p['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
+      $paymentStatus = $p['payment_status'] ?? 'free';
+
+      if (array_key_exists('amount', $p)) {
+        $amount = (float) $p['amount'];
+      } else {
+        $amount = $paymentStatus === 'free' ? 0 : $pricePerTicket;
+      }
+
+      $amountFormatted = '$' . number_format($amount, 2) . ' MXN';
 
       $passengersHtml .= "
                 <tr>
                     <td>" . ($index + 1) . "</td>
                     <td>{$fullName}</td>
                     <td>{$seatId}</td>
-                    <td>{$priceFormatted}</td>
+                    <td>{$amountFormatted}</td>
                 </tr>
             ";
     }
@@ -733,15 +736,6 @@ HTML;
     margin-top: 4px;
   }
 
-  .instructions {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
-    border-radius: 14px;
-    padding: 16px;
-    font-size: 12px;
-    color: #9a3412;
-  }
-
   .footer {
     margin-top: 20px;
     font-size: 10px;
@@ -754,7 +748,7 @@ HTML;
 <body>
   <div class="header">
     <div class="brand">RH Experience</div>
-    <div class="subtitle">Ficha de pago para cliente prospecto</div>
+    <div class="subtitle">Ficha de pago RH Experience</div>
   </div>
 
   <div class="badge">PAGO PENDIENTE</div>
@@ -829,19 +823,6 @@ HTML;
     <div class="total-amount">{$totalFormatted}</div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Información de pago</div>
-
-    <div class="instructions">
-      <strong>Importante:</strong> Esta ficha corresponde a una reservación para cliente prospecto.
-      Para completar el proceso, realiza el pago correspondiente y comparte el comprobante con tu asesor o con el equipo de RH Experience.
-      <br><br>
-      <strong>Monto por boleto:</strong> {$priceFormatted}<br>
-      <strong>Número de boletos:</strong> {$ticketsCount}<br>
-      <strong>Total:</strong> {$totalFormatted}
-    </div>
-  </div>
-
   <div class="footer">
     Este documento fue generado automáticamente por RH Experience.
   </div>
@@ -882,14 +863,6 @@ HTML;
     } catch (\Throwable $e) {
       return $date;
     }
-  }
-
-  private static function ticketCode(string $date, string $seatId, string $email, int $index): string
-  {
-    $base = $date . '|' . $seatId . '|' . $email . '|' . $index;
-    $hash = strtoupper(substr(hash('sha256', $base), 0, 8));
-
-    return 'RH-' . $hash;
   }
 
   private static function safeFilename(string $value): string
