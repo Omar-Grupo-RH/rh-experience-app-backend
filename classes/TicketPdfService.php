@@ -17,6 +17,8 @@ class TicketPdfService
     $namePayment = $payload['trip_data']['tickets_name'] ?? 'rh-experience';
     $passengers = $payload['passengers'] ?? [];
     $seats = $payload['trip_data']['seats'] ?? [];
+    $registration = $payload['registration'] ?? [];
+    $globalRegistrationType = $registration['registration_type'] ?? '';
 
     $html = self::buildHtmlHeader("Boletos RH Experience");
 
@@ -25,6 +27,8 @@ class TicketPdfService
     foreach ($passengers as $idx => $pax) {
       $seatId = $pax['seat_id'] ?? ($seats[$idx] ?? '');
       $ticketCode = trim($pax['ticket_code'] ?? '') ?: 'SIN-CODIGO';
+      $registrationType = $pax['registration_type'] ?? $globalRegistrationType;
+      $clientTypeLabel = self::getRegistrationTypeLabel($registrationType);
 
       $html .= self::ticketPageHtml([
         'date' => $date,
@@ -38,6 +42,8 @@ class TicketPdfService
         'count' => $totalPassengers,
         'ticket_code' => $ticketCode,
         'is_last' => ($idx + 1) === $totalPassengers,
+        'client_type' => $registrationType,
+        'client_type_label' => $clientTypeLabel,
       ]);
     }
 
@@ -435,6 +441,7 @@ HTML;
     $index = (int) ($d['index'] ?? 1);
     $count = (int) ($d['count'] ?? 1);
     $ticketCode = htmlspecialchars($d['ticket_code'] ?? 'SIN-CODIGO', ENT_QUOTES, 'UTF-8');
+    $clientTypeLabel = htmlspecialchars($d['client_type_label'] ?? 'Sin tipo', ENT_QUOTES, 'UTF-8');
 
     $pagebreak = !empty($d['is_last']) ? '' : '<div class="pagebreak"></div>';
 
@@ -488,6 +495,18 @@ HTML;
 
         <tr>
           <td class="detail-card" width="50%">
+            <span class="detail-label">Tipo de cliente</span>
+            <span class="detail-value">{$clientTypeLabel}</span>
+          </td>
+
+          <td class="detail-card" width="50%">
+            <span class="detail-label">Código de boleto</span>
+            <span class="detail-value">{$ticketCode}</span>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="detail-card" width="50%">
             <span class="detail-label">Correo</span>
             <span class="detail-value">{$email}</span>
           </td>
@@ -524,7 +543,7 @@ HTML;
         <tr>
           <td width="28%">
             <p class="boarding-label">RH Experience</p>
-            <p class="boarding-value">Boarding Pass</p>
+            <p class="boarding-value">Boleto de abordaje</p>
           </td>
 
           <td width="30%">
@@ -592,6 +611,18 @@ HTML;
       $seatId = htmlspecialchars($p['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
       $paymentStatus = $p['payment_status'] ?? 'free';
 
+      $passengerRegistrationType =
+        $p['registration_type']
+        ?? $p['client_type']
+        ?? $registration['registration_type']
+        ?? '';
+
+      $clientTypeLabel = htmlspecialchars(
+        self::getRegistrationTypeLabel($passengerRegistrationType),
+        ENT_QUOTES,
+        'UTF-8'
+      );
+
       if (array_key_exists('amount', $p)) {
         $amount = (float) $p['amount'];
       } else {
@@ -604,6 +635,7 @@ HTML;
                 <tr>
                     <td>" . ($index + 1) . "</td>
                     <td>{$fullName}</td>
+                    <td>{$clientTypeLabel}</td>
                     <td>{$seatId}</td>
                     <td>{$amountFormatted}</td>
                 </tr>
@@ -808,6 +840,7 @@ HTML;
         <tr>
           <th>#</th>
           <th>Pasajero</th>
+          <th>Tipo de cliente</th>
           <th>Asiento</th>
           <th>Importe</th>
         </tr>
@@ -863,6 +896,19 @@ HTML;
     } catch (\Throwable $e) {
       return $date;
     }
+  }
+
+  private static function getRegistrationTypeLabel(?string $type): string
+  {
+    return match ($type) {
+      'internal' => 'Personal interno',
+      'alliance' => 'Alianza',
+      'prize' => 'Premio',
+      'investor' => 'Inversionista',
+      'prospect' => 'Cliente prospecto',
+      'family_friend' => 'Familiares y Amigos',
+      default => 'Sin tipo',
+    };
   }
 
   private static function safeFilename(string $value): string

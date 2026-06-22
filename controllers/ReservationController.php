@@ -32,7 +32,6 @@ class ReservationController
 
             $idempotencyKey = self::getIdempotencyKey($payload);
             $normalizedPayload = self::normalizePayloadForHash($payload);
-
             $payloadHash = hash(
                 'sha256',
                 json_encode($normalizedPayload, JSON_UNESCAPED_UNICODE)
@@ -41,6 +40,7 @@ class ReservationController
             $tripId = (int) $payload['trip_data']['trip_id'];
             $seats = self::normalizeSeats($payload['trip_data']['seats']);
             $numPassengers = count($payload['passengers']);
+            $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
 
             if (count($seats) !== $numPassengers) {
                 JsonResponse::send([
@@ -94,8 +94,6 @@ class ReservationController
 
             $ticket->id = (int) $resTicket['id'];
 
-            $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
-
             foreach ($payload['passengers'] as $index => $p) {
                 $seatId = $seats[$index];
 
@@ -112,8 +110,6 @@ class ReservationController
                     'trip_id' => $tripId,
                     'ticket_code' => $ticketCode,
                     'payment_status' => $paymentStatus,
-                    'paid_at' => null,
-                    'paid_by' => null,
                     'seat_id' => $seatId,
                     'first_name' => trim($p['first_name'] ?? ''),
                     'last_name' => trim($p['last_name'] ?? ''),
@@ -140,6 +136,7 @@ class ReservationController
                 $payload['passengers'][$index]['payment_status'] = $paymentStatus;
                 $payload['passengers'][$index]['paid_at'] = null;
                 $payload['passengers'][$index]['paid_by'] = null;
+                $payload['passengers'][$index]['registration_type'] = $registrationType;
 
                 self::saveReservationRegistration(
                     $ticket->id,
@@ -447,10 +444,6 @@ class ReservationController
                 idempotency_key = idempotency_key
         ");
 
-        if (!$stmt) {
-            throw new \Exception('Error preparando idempotencia: ' . $db->error);
-        }
-
         $stmt->bind_param('ss', $key, $payloadHash);
         $stmt->execute();
 
@@ -460,10 +453,6 @@ class ReservationController
             WHERE idempotency_key = ?
             FOR UPDATE
         ");
-
-        if (!$stmt) {
-            throw new \Exception('Error consultando idempotencia: ' . $db->error);
-        }
 
         $stmt->bind_param('s', $key);
         $stmt->execute();
@@ -495,10 +484,6 @@ class ReservationController
             WHERE idempotency_key = ?
         ");
 
-        if (!$stmt) {
-            throw new \Exception('Error actualizando idempotencia: ' . $db->error);
-        }
-
         $stmt->bind_param('iss', $ticketId, $responseJson, $key);
         $stmt->execute();
     }
@@ -515,10 +500,6 @@ class ReservationController
             WHERE id = ?
             FOR UPDATE
         ");
-
-        if (!$stmt) {
-            throw new \Exception('Error consultando disponibilidad: ' . $db->error);
-        }
 
         $stmt->bind_param('i', $tripId);
         $stmt->execute();
@@ -541,10 +522,6 @@ class ReservationController
             FROM ticket_passengers
             WHERE trip_id = ?
         ");
-
-        if (!$stmt) {
-            throw new \Exception('Error consultando asientos reservados: ' . $db->error);
-        }
 
         $stmt->bind_param('i', $tripId);
         $stmt->execute();
@@ -573,11 +550,6 @@ class ReservationController
             ";
 
             $stmt = $db->prepare($query);
-
-            if (!$stmt) {
-                throw new \Exception('Error validando asientos: ' . $db->error);
-            }
-
             $stmt->bind_param($types, ...$params);
             $stmt->execute();
 
@@ -595,7 +567,9 @@ class ReservationController
         $passengers = $payload['passengers'] ?? [];
 
         $ticketsCount = count($passengers);
+
         $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+        $paymentReason = self::getPaymentReasonByRegistrationType($registrationType);
 
         $paidTicketsCount = 0;
         $freeTicketsCount = 0;
@@ -623,6 +597,7 @@ class ReservationController
                 'last_name' => $passenger['last_name'] ?? '',
                 'seat_id' => $passenger['seat_id'] ?? '',
                 'ticket_code' => $passenger['ticket_code'] ?? '',
+                'registration_type' => $passenger['registration_type'] ?? $registrationType,
                 'payment_status' => $paymentStatus,
                 'amount' => $amount,
             ];
@@ -635,7 +610,7 @@ class ReservationController
             'free_tickets_count' => $freeTicketsCount,
             'price_per_ticket' => $pricePerTicket,
             'total_amount' => $totalAmount,
-            'payment_reason' => self::getPaymentReasonByRegistrationType($registrationType),
+            'payment_reason' => $paymentReason,
             'passengers' => $passengerPaymentDetails,
         ];
     }
@@ -645,8 +620,8 @@ class ReservationController
         return match ($registrationType) {
             'prospect' => 1500,
             'family_friend' => 500,
-            'internal' => 500,
             'investor' => 500,
+            'internal' => 500,
             default => 0,
         };
     }
@@ -656,8 +631,8 @@ class ReservationController
         return match ($registrationType) {
             'prospect' => 'Cliente prospecto',
             'family_friend' => 'Familiares y amigos',
-            'internal' => 'Segunda visita de personal interno',
             'investor' => 'Invitado extra de inversionista',
+            'internal' => 'Segunda visita de personal interno',
             default => '',
         };
     }
@@ -674,14 +649,20 @@ class ReservationController
         $registration = new ReservationRegistration([
             'ticket_id' => $ticketId,
             'ticket_passenger_id' => $ticketPassengerId,
+
             'registration_type' => $registrationPayload['registration_type'] ?? '',
+
             'area_code' => $registrationPayload['area_code'] ?? null,
+
             'alliance_name' => $registrationPayload['alliance_name'] ?? null,
             'alliance_code' => $registrationPayload['alliance_code'] ?? null,
+
             'prize_code' => $registrationPayload['prize_code'] ?? null,
+
             'development' => $registrationPayload['development'] ?? null,
             'stage' => $registrationPayload['stage'] ?? null,
             'lot_number' => $registrationPayload['lot_number'] ?? null,
+
             'advisor_name' => $registrationPayload['advisor_name'] ?? null,
             'advisor_code' => $registrationPayload['advisor_code'] ?? null,
             'origin' => $registrationPayload['origin'] ?? null,
@@ -744,7 +725,8 @@ class ReservationController
                     'seats' => $seatNumbers,
                     'tickets_name' => $ticketsName
                 ],
-                'passengers' => $payload['passengers']
+                'passengers' => $payload['passengers'],
+                'registration' => $payload['RegistrationType'] ?? [],
             ];
 
             $ticketsPdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
