@@ -742,7 +742,7 @@ class TripController
               <div style="background:#f8fafc;border-radius:14px;padding:18px;margin-top:24px;border:1px solid #e2e8f0;">
                 <p style="margin:0 0 8px;font-weight:bold;color:#111827;">¿Necesitas ayuda?</p>
                 <p style="margin:0;color:#475569;font-size:14px;">Correo: experience@gruporh.mx</p>
-                <p style="margin:4px 0 0;color:#475569;font-size:14px;">Teléfono: +52 999 242 0278</p>
+                <p style="margin:4px 0 0;color:#475569;font-size:14px;">Teléfono: +52 990 375 6551</p>
               </div>
             </td>
           </tr>

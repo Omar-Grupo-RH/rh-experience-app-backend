@@ -304,7 +304,7 @@ class Email
 
                     <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
                       <strong>Email:</strong> experience@gruporh.mx<br>
-                      <strong>Teléfono:</strong> +52 999 242 0278<br>
+                      <strong>Teléfono:</strong> +52 990 375 6551<br>
                       <strong>Horario:</strong> Lunes a viernes de 9:00 a 18:00 hrs
                     </p>
                   </td>
@@ -387,7 +387,7 @@ Recuerda llegar a tiempo y prepárate para vivir una experiencia inolvidable.
 
 CONTACTO:
 Email: experience@gruporh.mx
-Teléfono: +52 999 242 0278
+Teléfono: +52 990 375 6551
 Horario: Lunes a viernes de 9:00 a 18:00 hrs.
 
 © {$year} RH Experience. Todos los derechos reservados.
