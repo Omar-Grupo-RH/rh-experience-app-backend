@@ -906,7 +906,7 @@ HTML;
       'prize' => 'Premio',
       'investor' => 'Inversionista',
       'prospect' => 'Cliente prospecto',
-      'family_friend' => 'Familiares y Amigos',
+      'family_friend' => 'Invitado extra, familiares o amigos',
       default => 'Sin tipo',
     };
   }

@@ -361,7 +361,11 @@ class ReservationController
             throw new \InvalidArgumentException('Este tipo de registro permite máximo 2 pasajeros.');
         }
 
-        if (!in_array($registrationType, ['investor', 'prize'], true) && $passengersCount > 1) {
+        if ($registrationType === 'family_friend') {
+            return;
+        }
+
+        if (!in_array($registrationType, ['investor', 'prize', 'family_friend'], true) && $passengersCount > 1) {
             throw new \InvalidArgumentException('Este tipo de registro permite máximo 1 pasajero.');
         }
     }
@@ -630,7 +634,7 @@ class ReservationController
     {
         return match ($registrationType) {
             'prospect' => 'Cliente prospecto',
-            'family_friend' => 'Familiares y amigos',
+            'family_friend' => 'Invitado extra, familiares o amigos',
             'investor' => 'Invitado extra de inversionista',
             'internal' => 'Segunda visita de personal interno',
             default => '',

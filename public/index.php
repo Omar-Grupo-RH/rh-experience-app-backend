@@ -25,7 +25,13 @@ header('Vary: Origin');
 // Headers comunes
 header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With,Idempotency-Key');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-header('Access-Control-Max-Age: 86400');
+
+header('Access-Control-Max-Age: 0');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: post-check=0, pre-check=0', false);
+header('Pragma: no-cache');
+header('Expires: 0');
+
 
 // Preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -35,6 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     }
     header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With,Idempotency-Key');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Max-Age: 0');
+
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     http_response_code(204);
     exit;
 }
