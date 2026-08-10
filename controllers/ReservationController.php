@@ -104,7 +104,8 @@ class ReservationController
                     $index,
                     $p
                 );
-
+                $phoneCountryCode = preg_replace('/\D/', '', trim($p['phone_country_code'] ?? '52'));
+                $phone = preg_replace('/\D/', '', trim($p['phone'] ?? ''));
                 $passenger = new TicketPassenger([
                     'ticket_id' => $ticket->id,
                     'trip_id' => $tripId,
@@ -114,7 +115,8 @@ class ReservationController
                     'first_name' => trim($p['first_name'] ?? ''),
                     'last_name' => trim($p['last_name'] ?? ''),
                     'email' => trim($p['email'] ?? ''),
-                    'phone' => trim($p['phone'] ?? ''),
+                    'phone_country_code' => $phoneCountryCode,
+                    'phone' => $phone,
                     'born_date' => $p['born_date'] ?? null,
                     'allergies' => $p['allergies'] ?? [],
                     'health_conditions' => $p['health_conditions'] ?? []
