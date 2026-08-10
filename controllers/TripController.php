@@ -173,13 +173,50 @@ class TripController
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $payload = self::readBody();
+
+            $payload['is_active'] = 1;
+
             $trip = new Trip($payload);
 
-            $existTrip = Trip::where('trip_date', $trip->trip_date);
+            if (empty($trip->trip_date)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'La fecha del RH Experience es obligatoria.'
+                ], 400);
+                exit;
+            }
+
+            $db = ActiveRecord::getDB();
+
+            $query = "
+            SELECT id
+            FROM trips
+            WHERE trip_date = ?
+              AND is_active = 1
+            LIMIT 1
+        ";
+
+            $stmt = $db->prepare($query);
+
+            if (!$stmt) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Error al validar la fecha del RH Experience.'
+                ], 500);
+                exit;
+            }
+
+            $stmt->bind_param('s', $trip->trip_date);
+            $stmt->execute();
+
+            $resultExistTrip = $stmt->get_result();
+            $existTrip = $resultExistTrip->fetch_assoc();
 
             if ($existTrip) {
                 JsonResponse::send([
-                    'errors' => 'Ya hay un RH EXPERIENCE agendado esa fecha.'
+                    'success' => false,
+                    'errors' => 'Ya hay un RH EXPERIENCE activo agendado esa fecha.',
+                    'message' => 'Ya hay un RH EXPERIENCE activo agendado esa fecha.'
                 ], 422);
                 exit;
             }
@@ -214,7 +251,8 @@ class TripController
                     'title'         => $trip->title,
                     'trip_date'     => $trip->trip_date,
                     'total_seats'   => (int) $trip->total_seats,
-                    'avaible_seats' => (int) $trip->avaible_seats,
+                    'avaible_seats' => (int) ($trip->avaible_seats ?? $trip->total_seats ?? 15),
+                    'is_active'     => (int) $trip->is_active,
                 ],
             ], 201);
         }
@@ -380,7 +418,9 @@ class TripController
             ], 404);
             return;
         }
-
+        $tripId = (int) $trip->id;
+        $tripTitle = $trip->title;
+        $tripDate = $trip->trip_date;
         try {
             $trip->is_active = 0;
             $ok = $trip->guardar();
@@ -400,9 +440,17 @@ class TripController
             exit;
         }
 
+        $notificationResult = self::notifyTripDeleted(
+            $tripId,
+            $tripTitle,
+            $tripDate
+        );
+
+
         JsonResponse::send([
             'success' => true,
-            'message' => 'RH Experience eliminado correctamente',
+            'message' => 'RH Experience eliminado correctamente. Se notificó a los pasajeros registrados.',
+            'notifications' => $notificationResult,
         ], 200);
     }
 
@@ -516,6 +564,45 @@ class TripController
             } catch (Throwable $e) {
                 $emailsFailed++;
                 error_log('Error notificando actualización de viaje. Ticket ID ' . $ticket['ticket_id'] . ': ' . $e->getMessage());
+            }
+        }
+
+        return [
+            'tickets_found' => count($tickets),
+            'emails_sent' => $emailsSent,
+            'emails_failed' => $emailsFailed,
+        ];
+    }
+
+    private static function notifyTripDeleted(
+        int $tripId,
+        string $tripTitle,
+        string $tripDate
+    ): array {
+        $tickets = self::getTicketsWithPassengersByTrip($tripId);
+
+        $emailsSent = 0;
+        $emailsFailed = 0;
+
+        foreach ($tickets as $ticket) {
+            try {
+                $result = self::sendTripDeletedEmail(
+                    $ticket,
+                    $tripTitle,
+                    $tripDate
+                );
+
+                $emailsSent += (int) ($result['sent'] ?? 0);
+                $emailsFailed += (int) ($result['failed'] ?? 0);
+            } catch (Throwable $e) {
+                $emailsFailed++;
+
+                error_log(
+                    'Error notificando cancelación de viaje. Ticket ID ' .
+                        $ticket['ticket_id'] .
+                        ': ' .
+                        $e->getMessage()
+                );
             }
         }
 
@@ -665,6 +752,111 @@ class TripController
         return $email->send();
     }
 
+    private static function sendTripDeletedEmail(
+        array $ticket,
+        string $tripTitle,
+        string $tripDate
+    ): array {
+        $passengers = $ticket['passengers'] ?? [];
+
+        if (empty($passengers)) {
+            return [
+                'sent' => 0,
+                'failed' => 1,
+            ];
+        }
+
+        $seatNumbers = $ticket['seat_numbers'] ?? [];
+
+        if (empty($seatNumbers)) {
+            $seatNumbers = array_values(array_filter(array_map(function ($p) {
+                return $p['seat_id'] ?? null;
+            }, $passengers)));
+        }
+
+        $seatsText = implode(', ', $seatNumbers);
+
+        $sent = 0;
+        $failed = 0;
+        $emailsAlreadySent = [];
+
+        foreach ($passengers as $passenger) {
+            $emailTo = trim($passenger['email'] ?? '');
+
+            if (!$emailTo || !filter_var($emailTo, FILTER_VALIDATE_EMAIL)) {
+                $failed++;
+
+                error_log(
+                    'No se pudo enviar cancelación: email inválido para ticket ' .
+                        $ticket['ticket_id']
+                );
+
+                continue;
+            }
+
+            $emailKey = strtolower($emailTo);
+
+            if (isset($emailsAlreadySent[$emailKey])) {
+                continue;
+            }
+
+            $emailsAlreadySent[$emailKey] = true;
+
+            $passengerName = trim(
+                ($passenger['first_name'] ?? '') . ' ' . ($passenger['last_name'] ?? '')
+            );
+
+            if ($passengerName === '') {
+                $passengerName = 'Cliente RH Experience';
+            }
+
+            try {
+                $email = new Email(
+                    $emailTo,
+                    $passengerName,
+                    'Cancelación de tu RH Experience',
+                    $tripDate,
+                    $seatsText,
+                    (string) $ticket['ticket_id']
+                );
+
+                $email->setBody(
+                    self::buildTripDeletedEmailHtml(
+                        $passengerName,
+                        $tripTitle,
+                        $tripDate,
+                        $seatsText
+                    )
+                );
+
+                if ($email->send()) {
+                    $sent++;
+                } else {
+                    $failed++;
+                }
+
+                // Pausa para evitar que el SMTP bloquee conexiones seguidas
+                sleep(2);
+            } catch (Throwable $e) {
+                $failed++;
+
+                error_log(
+                    'Error enviando cancelación a ' .
+                        $emailTo .
+                        '. Ticket ID ' .
+                        $ticket['ticket_id'] .
+                        ': ' .
+                        $e->getMessage()
+                );
+            }
+        }
+
+        return [
+            'sent' => $sent,
+            'failed' => $failed,
+        ];
+    }
+
     private static function buildTripUpdatedEmailHtml(
         string $name,
         string $tripTitle,
@@ -740,6 +932,93 @@ class TripController
 
               <p style="font-size:15px;line-height:1.6;color:#4b5563;">
                 Por favor conserva el boleto actualizado adjunto en este correo y preséntalo el día del viaje.
+              </p>
+
+              <div style="background:#f8fafc;border-radius:14px;padding:18px;margin-top:24px;border:1px solid #e2e8f0;">
+                <p style="margin:0 0 8px;font-weight:bold;color:#111827;">¿Necesitas ayuda?</p>
+                <p style="margin:0;color:#475569;font-size:14px;">Correo: experience@gruporh.mx</p>
+                <p style="margin:4px 0 0;color:#475569;font-size:14px;">Teléfono: +52 990 375 6551</p>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:18px 28px;background:#f8fafc;color:#94a3b8;font-size:12px;text-align:center;">
+              &copy; {$year} RH Experience. Este correo fue enviado automáticamente.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+HTML;
+    }
+
+    private static function buildTripDeletedEmailHtml(
+        string $name,
+        string $tripTitle,
+        string $tripDate,
+        string $seats
+    ): string {
+        $name = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+        $tripTitle = htmlspecialchars($tripTitle, ENT_QUOTES, 'UTF-8');
+        $tripDate = htmlspecialchars($tripDate, ENT_QUOTES, 'UTF-8');
+        $seats = htmlspecialchars($seats, ENT_QUOTES, 'UTF-8');
+
+        $year = date('Y');
+
+        return <<<HTML
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cancelación de RH Experience</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#1f2937;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:30px 0;">
+    <tr>
+      <td align="center">
+        <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="background:#315fa8;padding:28px;color:#ffffff;">
+              <h1 style="margin:0;font-size:26px;">RH Experience</h1>
+              <p style="margin:8px 0 0;font-size:14px;">Información importante sobre tu viaje</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px;">
+              <div style="display:inline-block;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:bold;margin-bottom:18px;">
+                VIAJE CANCELADO
+              </div>
+
+              <h2 style="margin:0 0 12px;font-size:22px;color:#111827;">
+                Hola {$name}
+              </h2>
+
+              <p style="font-size:15px;line-height:1.6;color:#4b5563;">
+                Te informamos que el RH Experience en el que estabas registrado ha sido cancelado.
+              </p>
+
+              <div style="background:#f1f5f9;border-radius:14px;padding:18px;margin:20px 0;">
+                <p style="margin:0;font-size:13px;color:#64748b;">RH Experience</p>
+                <p style="margin:5px 0 0;font-size:18px;font-weight:bold;color:#111827;">{$tripTitle}</p>
+              </div>
+
+              <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:18px;margin:20px 0;">
+                <p style="margin:0;font-size:11px;color:#b91c1c;text-transform:uppercase;font-weight:bold;">Fecha cancelada</p>
+                <p style="margin:6px 0 0;font-size:16px;color:#7f1d1d;font-weight:bold;">{$tripDate}</p>
+              </div>
+
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:18px;margin:20px 0;">
+                <p style="margin:0;font-size:13px;color:#1d4ed8;font-weight:bold;">Asientos registrados</p>
+                <p style="margin:6px 0 0;font-size:15px;color:#1e3a8a;">{$seats}</p>
+              </div>
+
+              <p style="font-size:15px;line-height:1.6;color:#4b5563;">
+                Nuestro equipo podrá contactarte para brindarte más información o apoyarte con una nueva fecha disponible.
               </p>
 
               <div style="background:#f8fafc;border-radius:14px;padding:18px;margin-top:24px;border:1px solid #e2e8f0;">
