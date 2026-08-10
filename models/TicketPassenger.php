@@ -21,6 +21,7 @@ class TicketPassenger extends ActiveRecord
         'first_name',
         'last_name',
         'email',
+        'phone_country_code',
         'phone',
         'born_date',
         'allergies',
@@ -39,6 +40,7 @@ class TicketPassenger extends ActiveRecord
     public string $first_name;
     public string $last_name;
     public string $email;
+    public string $phone_country_code;
     public string $phone;
     public ?string $born_date;
     public string $allergies;
@@ -63,6 +65,7 @@ class TicketPassenger extends ActiveRecord
         $this->first_name = trim($args['first_name'] ?? '');
         $this->last_name = trim($args['last_name'] ?? '');
         $this->email = trim($args['email'] ?? '');
+        $this->phone_country_code = trim($args['phone_country_code'] ?? '');
         $this->phone = trim($args['phone'] ?? '');
 
         $this->born_date = $args['born_date'] ?? null;

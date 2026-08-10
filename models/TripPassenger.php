@@ -14,6 +14,7 @@ class TripPassenger extends ActiveRecord
         'first_name',
         'last_name',
         'email',
+        'phone_country_code',
         'phone',
         'born_date',
         'allergies',
@@ -46,6 +47,7 @@ class TripPassenger extends ActiveRecord
     public $first_name;
     public $last_name;
     public $email;
+    public $phone_country_code;
     public $phone;
     public $born_date;
     public $allergies;
@@ -80,6 +82,7 @@ class TripPassenger extends ActiveRecord
         $this->first_name = $args['first_name'] ?? '';
         $this->last_name = $args['last_name'] ?? '';
         $this->email = $args['email'] ?? '';
+        $this->phone_country_code = $args['phone_country_code'] ?? '';
         $this->phone = $args['phone'] ?? '';
         $this->born_date = $args['born_date'] ?? null;
         $this->allergies = $args['allergies'] ?? '[]';
@@ -124,6 +127,7 @@ class TripPassenger extends ActiveRecord
             tp.first_name,
             tp.last_name,
             tp.email,
+            tp.phone_country_code,
             tp.phone,
             tp.born_date,
             tp.allergies,
