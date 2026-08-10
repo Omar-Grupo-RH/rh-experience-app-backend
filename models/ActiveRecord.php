@@ -133,17 +133,26 @@ class ActiveRecord
 
     public static function allWithPassengersCount($orden = 'DESC')
     {
-        $query = "SELECT 
-                t.id,
-                t.trip_date,
-                t.title,
-                t.total_seats,
-                COUNT(tp.id) as unavaible_seats 
-              FROM " . static::$tabla . " t
-              LEFT JOIN tickets tk ON t.id = tk.trip_id
-              LEFT JOIN ticket_passengers tp ON tk.id = tp.ticket_id
-              GROUP BY t.id, t.trip_date, t.title, t.total_seats
-              ORDER BY t.trip_date {$orden}";
+        $orden = strtoupper($orden) === 'ASC' ? 'ASC' : 'DESC';
+
+        $query = "SELECT
+        t.id,
+        t.trip_date,
+        t.title,
+        t.total_seats,
+        COUNT(tp.id) AS unavaible_seats
+    FROM " . static::$tabla . " t
+    LEFT JOIN tickets tk 
+        ON t.id = tk.trip_id
+    LEFT JOIN ticket_passengers tp 
+        ON tk.id = tp.ticket_id
+    WHERE t.is_active = 1
+    GROUP BY 
+        t.id, 
+        t.trip_date, 
+        t.title, 
+        t.total_seats
+    ORDER BY t.trip_date {$orden}";
 
         $resultado = self::consultarSQL($query);
         return $resultado;

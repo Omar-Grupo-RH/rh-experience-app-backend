@@ -102,72 +102,83 @@ class DashboardController
         $paidPassengerCase = self::paidPassengerCaseSql();
 
         $query = "
-            SELECT 
-                t.id,
-                t.title,
-                t.trip_date,
-                t.total_seats AS total_capacity,
+    SELECT
+        t.id,
+        t.title,
+        t.trip_date,
+        t.total_seats AS total_capacity,
 
-                COUNT(tp.id) AS registered_passengers,
+        COUNT(tp.id) AS registered_passengers,
 
-                GREATEST(t.total_seats - COUNT(tp.id), 0) AS available_seats,
+        GREATEST(t.total_seats - COUNT(tp.id), 0) AS available_seats,
 
-                SUM(
-                    CASE 
-                        WHEN rr.registration_type = 'prospect' THEN 1 
-                        ELSE 0 
-                    END
-                ) AS prospect_passengers,
+        SUM(
+            CASE 
+                WHEN rr.registration_type = 'prospect' THEN 1 
+                ELSE 0 
+            END
+        ) AS prospect_passengers,
 
-                SUM(
-                    CASE 
-                        WHEN rr.registration_type = 'family_friend' THEN 1 
-                        ELSE 0 
-                    END
-                ) AS family_friend_passengers,
+        SUM(
+            CASE 
+                WHEN rr.registration_type = 'family_friend' THEN 1 
+                ELSE 0 
+            END
+        ) AS family_friend_passengers,
 
-                SUM(
-                    CASE
-                        WHEN rr.registration_type = 'investor'
-                            AND tp.id <> (
-                                SELECT MIN(tp_inv.id)
-                                FROM ticket_passengers tp_inv
-                                WHERE tp_inv.ticket_id = tp.ticket_id
-                            )
-                        THEN 1
-                        ELSE 0
-                    END
-                ) AS investor_extra_passengers,
+        SUM(
+            CASE
+                WHEN rr.registration_type = 'investor'
+                    AND tp.id <> (
+                        SELECT MIN(tp_inv.id)
+                        FROM ticket_passengers tp_inv
+                        WHERE tp_inv.ticket_id = tp.ticket_id
+                    )
+                THEN 1
+                ELSE 0
+            END
+        ) AS investor_extra_passengers,
 
-                SUM(
-                    CASE
-                        WHEN rr.registration_type = 'internal'
-                            AND EXISTS (
-                                SELECT 1
-                                FROM ticket_passengers tp_prev
-                                WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
-                                AND tp_prev.id < tp.id
-                                LIMIT 1
-                            )
-                        THEN 1
-                        ELSE 0
-                    END
-                ) AS internal_second_visit_passengers,
+        SUM(
+            CASE
+                WHEN rr.registration_type = 'internal'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM ticket_passengers tp_prev
+                        WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
+                        AND tp_prev.id < tp.id
+                        LIMIT 1
+                    )
+                THEN 1
+                ELSE 0
+            END
+        ) AS internal_second_visit_passengers,
 
-                SUM({$paidPassengerCase}) AS paid_passengers,
+        SUM({$paidPassengerCase}) AS paid_passengers,
 
-                SUM({$paymentAmountCase}) AS estimated_revenue
+        SUM({$paymentAmountCase}) AS estimated_revenue
 
-            FROM trips t
-            LEFT JOIN ticket_passengers tp
-                ON tp.trip_id = t.id
-            LEFT JOIN reservation_registrations rr
-                ON rr.ticket_passenger_id = tp.id
-            WHERE t.trip_date >= CURDATE()
-            GROUP BY t.id, t.title, t.trip_date, t.total_seats
-            ORDER BY t.trip_date ASC
-            LIMIT 1
-        ";
+    FROM trips t
+
+    LEFT JOIN ticket_passengers tp
+        ON tp.trip_id = t.id
+
+    LEFT JOIN reservation_registrations rr
+        ON rr.ticket_passenger_id = tp.id
+
+    WHERE t.trip_date >= CURDATE()
+      AND t.is_active = 1
+
+    GROUP BY 
+        t.id, 
+        t.title, 
+        t.trip_date, 
+        t.total_seats
+
+    ORDER BY t.trip_date ASC
+
+    LIMIT 1
+";
 
         $result = $db->query($query);
 

@@ -46,32 +46,34 @@ class TripController
         $db = ActiveRecord::getDB();
 
         $query = "
-        SELECT
-            t.id,
-            t.title,
-            t.trip_date,
+    SELECT
+        t.id,
+        t.title,
+        t.trip_date,
 
-            COALESCE(t.total_seats, 15) AS total_seats,
+        COALESCE(t.total_seats, 15) AS total_seats,
 
-            COUNT(tp.id) AS unavaible_seats,
+        COUNT(tp.id) AS unavaible_seats,
 
-            COUNT(tp.id) AS passengers_count,
+        COUNT(tp.id) AS passengers_count,
 
-            GREATEST(COALESCE(t.total_seats, 15) - COUNT(tp.id), 0) AS avaible_seats
+        GREATEST(COALESCE(t.total_seats, 15) - COUNT(tp.id), 0) AS avaible_seats
 
-        FROM trips t
+    FROM trips t
 
-        LEFT JOIN ticket_passengers tp
-            ON tp.trip_id = t.id
+    LEFT JOIN ticket_passengers tp
+        ON tp.trip_id = t.id
 
-        GROUP BY
-            t.id,
-            t.title,
-            t.trip_date,
-            t.total_seats
+    WHERE t.is_active = 1
 
-        ORDER BY t.trip_date ASC
-    ";
+    GROUP BY
+        t.id,
+        t.title,
+        t.trip_date,
+        t.total_seats
+
+    ORDER BY t.trip_date ASC
+";
 
         $result = $db->query($query);
 
@@ -366,7 +368,7 @@ class TripController
         } catch (Throwable $e) {
             JsonResponse::send([
                 'success' => false,
-                'message' => 'Error al buscar el evento'
+                'message' => 'Error al buscar el tour'
             ], 500);
             return;
         }
@@ -374,17 +376,18 @@ class TripController
         if (!$trip) {
             JsonResponse::send([
                 'success' => false,
-                'message' => 'Evento no encontrado'
+                'message' => 'RH Experience no encontrado'
             ], 404);
             return;
         }
 
         try {
-            $ok = $trip->eliminar();
+            $trip->is_active = 0;
+            $ok = $trip->guardar();
         } catch (Throwable $e) {
             JsonResponse::send([
                 'success' => false,
-                'message' => 'Error al eliminar el evento'
+                'message' => 'Error al eliminar el RH Experience'
             ], 500);
             exit;
         }
@@ -392,14 +395,14 @@ class TripController
         if (!$ok) {
             JsonResponse::send([
                 'success' => false,
-                'message' => 'No se pudo eliminar el evento'
+                'message' => 'No se pudo eliminar el RH Experience'
             ], 500);
             exit;
         }
 
         JsonResponse::send([
             'success' => true,
-            'message' => 'RH EXPERIENCE eliminado correctamente',
+            'message' => 'RH Experience eliminado correctamente',
         ], 200);
     }
 
