@@ -115,6 +115,7 @@ class ReservationController
                     'first_name' => trim($p['first_name'] ?? ''),
                     'last_name' => trim($p['last_name'] ?? ''),
                     'email' => trim($p['email'] ?? ''),
+                    'city' => trim($p['city'] ?? ''),
                     'phone_country_code' => $phoneCountryCode,
                     'phone' => $phone,
                     'born_date' => $p['born_date'] ?? null,

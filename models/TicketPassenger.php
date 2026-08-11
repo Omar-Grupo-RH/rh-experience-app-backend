@@ -26,7 +26,8 @@ class TicketPassenger extends ActiveRecord
         'born_date',
         'allergies',
         'health_conditions',
-        'created_at'
+        'created_at',
+        'city'
     ];
 
     public ?int $id;
@@ -46,6 +47,7 @@ class TicketPassenger extends ActiveRecord
     public string $allergies;
     public string $health_conditions;
     public string $created_at;
+    public string $city;
 
     public function __construct($args = [])
     {
@@ -79,6 +81,7 @@ class TicketPassenger extends ActiveRecord
             : ($args['health_conditions'] ?? '[]');
 
         $this->created_at = $args['created_at'] ?? $this->nowDateMerida();
+        $this->city = trim($args['city'] ?? '');
     }
 
     public function nowDateMerida(): string
