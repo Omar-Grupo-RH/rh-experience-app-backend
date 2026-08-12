@@ -219,6 +219,263 @@ class ReservationController
         }
     }
 
+    public static function updatePassengerInformation()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+
+            $cleanText = function ($value) {
+                $value = trim((string) $value);
+                $value = strip_tags($value);
+                $value = preg_replace('/\s+/', ' ', $value);
+
+                return $value;
+            };
+
+            $isSafeText = function ($value) {
+                return (bool) preg_match('/^[\p{L}\p{N}\sáéíóúÁÉÍÓÚñÑüÜ.,\-]+$/u', $value);
+            };
+
+            $isValidDate = function ($date) {
+                $dateTime = \DateTime::createFromFormat('Y-m-d', $date);
+
+                return $dateTime && $dateTime->format('Y-m-d') === $date;
+            };
+
+            $isAdult = function ($bornDate) {
+                $birthDate = new \DateTime($bornDate);
+                $today = new \DateTime();
+
+                return $today->diff($birthDate)->y >= 18;
+            };
+
+            $cleanTags = function ($items, $fieldName) use ($cleanText, $isSafeText) {
+                $cleanItems = [];
+
+                foreach ($items as $item) {
+                    $item = $cleanText($item);
+
+                    if ($item === '') {
+                        continue;
+                    }
+
+                    if (mb_strlen($item) > 80) {
+                        throw new \InvalidArgumentException(
+                            "El campo {$fieldName} contiene un valor demasiado largo."
+                        );
+                    }
+
+                    if (!$isSafeText($item)) {
+                        throw new \InvalidArgumentException(
+                            "El campo {$fieldName} contiene caracteres no permitidos."
+                        );
+                    }
+
+                    $cleanItems[] = $item;
+                }
+
+                return array_values(array_unique($cleanItems));
+            };
+
+            $errors = [];
+
+            $id = (int) ($payload['id'] ?? 0);
+            $firstName = $cleanText($payload['first_name'] ?? '');
+            $lastName = $cleanText($payload['last_name'] ?? '');
+            $email = trim((string) ($payload['email'] ?? ''));
+            $phoneCountryCode = trim((string) ($payload['phone_country_code'] ?? ''));
+            $phone = trim((string) ($payload['phone'] ?? ''));
+            $city = $cleanText($payload['city'] ?? '');
+            $bornDate = trim((string) ($payload['born_date'] ?? ''));
+
+            $allergies = $payload['allergies'] ?? [];
+            $healthConditions = $payload['health_conditions'] ?? [];
+
+            if ($id <= 0) {
+                $errors['id'] = 'ID de pasajero no válido.';
+            }
+
+            if ($firstName === '') {
+                $errors['first_name'] = 'El nombre es obligatorio.';
+            } elseif (mb_strlen($firstName) < 3 || mb_strlen($firstName) > 100) {
+                $errors['first_name'] = 'El nombre debe tener entre 3 y 100 caracteres.';
+            } elseif (!$isSafeText($firstName)) {
+                $errors['first_name'] = 'El nombre contiene caracteres no permitidos.';
+            }
+
+            if ($lastName === '') {
+                $errors['last_name'] = 'El apellido es obligatorio.';
+            } elseif (mb_strlen($lastName) < 3 || mb_strlen($lastName) > 100) {
+                $errors['last_name'] = 'El apellido debe tener entre 3 y 100 caracteres.';
+            } elseif (!$isSafeText($lastName)) {
+                $errors['last_name'] = 'El apellido contiene caracteres no permitidos.';
+            }
+
+            if ($email === '') {
+                $errors['email'] = 'El correo electrónico es obligatorio.';
+            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $errors['email'] = 'El correo electrónico no es válido.';
+            } elseif (mb_strlen($email) > 190) {
+                $errors['email'] = 'El correo electrónico es demasiado largo.';
+            }
+
+            if (!in_array($phoneCountryCode, ['52', '1'], true)) {
+                $errors['phone_country_code'] = 'La lada debe ser 52 o 1.';
+            }
+
+            if ($phone === '') {
+                $errors['phone'] = 'El teléfono es obligatorio.';
+            } elseif (!preg_match('/^[0-9]{10}$/', $phone)) {
+                $errors['phone'] = 'El teléfono debe tener exactamente 10 dígitos, sin espacios, guiones ni caracteres especiales.';
+            }
+
+            if ($city === '') {
+                $errors['city'] = 'La ciudad es obligatoria.';
+            } elseif (mb_strlen($city) < 3 || mb_strlen($city) > 100) {
+                $errors['city'] = 'La ciudad debe tener entre 3 y 100 caracteres.';
+            } elseif (!$isSafeText($city)) {
+                $errors['city'] = 'La ciudad contiene caracteres no permitidos.';
+            }
+
+            if ($bornDate === '') {
+                $errors['born_date'] = 'La fecha de nacimiento es obligatoria.';
+            } elseif (!$isValidDate($bornDate)) {
+                $errors['born_date'] = 'La fecha de nacimiento no es válida.';
+            } elseif (!$isAdult($bornDate)) {
+                $errors['born_date'] = 'El pasajero debe ser mayor de edad.';
+            }
+
+            if (!is_array($allergies)) {
+                $errors['allergies'] = 'Las alergias deben enviarse como arreglo.';
+            }
+
+            if (!is_array($healthConditions)) {
+                $errors['health_conditions'] = 'Las condiciones de salud deben enviarse como arreglo.';
+            }
+
+            if (!empty($errors)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Datos inválidos.',
+                    'errors' => $errors
+                ], 422);
+                return;
+            }
+
+            $cleanAllergies = $cleanTags($allergies, 'alergias');
+            $cleanHealthConditions = $cleanTags(
+                $healthConditions,
+                'condiciones de salud'
+            );
+
+            $allergiesJson = json_encode($cleanAllergies, JSON_UNESCAPED_UNICODE);
+            $healthConditionsJson = json_encode(
+                $cleanHealthConditions,
+                JSON_UNESCAPED_UNICODE
+            );
+
+            $passenger = TripPassenger::find($id);
+
+            if (!$passenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $db = TripPassenger::getDB();
+
+            $query = "
+            UPDATE ticket_passengers
+            SET
+                first_name = ?,
+                last_name = ?,
+                email = ?,
+                phone_country_code = ?,
+                phone = ?,
+                city = ?,
+                born_date = ?,
+                allergies = ?,
+                health_conditions = ?
+            WHERE id = ?
+            LIMIT 1
+        ";
+
+            $stmt = $db->prepare($query);
+
+            if (!$stmt) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'No se pudo preparar la actualización del pasajero.'
+                ], 500);
+                return;
+            }
+
+            $stmt->bind_param(
+                'sssssssssi',
+                $firstName,
+                $lastName,
+                $email,
+                $phoneCountryCode,
+                $phone,
+                $city,
+                $bornDate,
+                $allergiesJson,
+                $healthConditionsJson,
+                $id
+            );
+
+            if (!$stmt->execute()) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'No se pudo actualizar la información del pasajero.'
+                ], 500);
+                return;
+            }
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Información del pasajero actualizada correctamente.',
+                'data' => [
+                    'id' => $id,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'email' => $email,
+                    'phone_country_code' => $phoneCountryCode,
+                    'phone' => $phone,
+                    'city' => $city,
+                    'born_date' => $bornDate,
+                    'allergies' => $cleanAllergies,
+                    'health_conditions' => $cleanHealthConditions,
+                ]
+            ], 200);
+            return;
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::send([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 422);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error al actualizar información del pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al actualizar la información del pasajero.'
+            ], 500);
+            return;
+        }
+    }
+
     public static function passengerVerifyEmail()
     {
         try {

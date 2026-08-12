@@ -77,6 +77,8 @@ $router->get('/api/users', [ClientController::class, 'index'], true);
 $router->post('/api/users', [ClientController::class, 'store'], true);
 $router->post('/api/users/update', [ClientController::class, 'update'], true);
 $router->post('/api/users/destroy', [ClientController::class, 'destroy'], true);
+$router->post('/api/passengers/update', [ReservationController::class, 'updatePassengerInformation'], true);
+
 
 // Admin
 $router->post('/api/trip/create', [TripController::class, 'store'], true);
