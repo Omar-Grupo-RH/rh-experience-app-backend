@@ -140,7 +140,9 @@ class ActiveRecord
         t.trip_date,
         t.title,
         t.total_seats,
-        COUNT(tp.id) AS unavaible_seats
+        COUNT(tp.id) AS unavaible_seats,
+        COUNT(tp.id) AS passengers_count,
+        GREATEST(COALESCE(t.total_seats, 15) - COUNT(tp.id), 0) AS avaible_seats
     FROM " . static::$tabla . " t
     LEFT JOIN tickets tk 
         ON t.id = tk.trip_id

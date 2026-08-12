@@ -946,6 +946,359 @@ class ReservationController
         }
     }
 
+    public static function reschedulePassenger()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+            $currentTripId = (int) ($payload['current_trip_id'] ?? 0);
+            $newTripId = (int) ($payload['new_trip_id'] ?? 0);
+            $newSeatId = trim((string) ($payload['new_seat_id'] ?? ''));
+
+            if (!$passengerId || !$currentTripId || !$newTripId || !$newSeatId) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Faltan datos requeridos para reagendar el pasajero.'
+                ], 400);
+                return;
+            }
+
+            if ($currentTripId === $newTripId) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El nuevo tour debe ser diferente al tour actual.'
+                ], 422);
+                return;
+            }
+
+            $db = TicketPassenger::getDB();
+
+            // Obtener pasajero actual
+            $passenger = TicketPassenger::find($passengerId);
+
+            if (!$passenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $oldSeatId = $passenger->seat_id;
+
+            // Validar que el nuevo tour existe y tiene disponibilidad
+            $query = "
+                SELECT
+                    t.id,
+                    COALESCE(t.total_seats, 15) AS total_seats,
+                    COUNT(tp.id) AS unavaible_seats,
+                    GREATEST(COALESCE(t.total_seats, 15) - COUNT(tp.id), 0) AS avaible_seats
+                FROM trips t
+                LEFT JOIN ticket_passengers tp ON tp.trip_id = t.id
+                WHERE t.id = ? AND t.is_active = 1
+                GROUP BY t.id
+            ";
+
+            $stmt = $db->prepare($query);
+
+            if (!$stmt) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Error al validar el nuevo tour.'
+                ], 500);
+                return;
+            }
+
+            $stmt->bind_param('i', $newTripId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $trip = $result->fetch_assoc();
+
+            if (!$trip) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El nuevo tour no existe o no está disponible.'
+                ], 404);
+                return;
+            }
+
+            if ($trip['avaible_seats'] <= 0) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El nuevo tour no tiene asientos disponibles.'
+                ], 422);
+                return;
+            }
+
+            // Validar que el asiento no esté ocupado
+            $checkSeatQuery = "
+                SELECT id FROM ticket_passengers
+                WHERE trip_id = ? AND seat_id = ?
+                LIMIT 1
+            ";
+
+            $seatStmt = $db->prepare($checkSeatQuery);
+
+            if (!$seatStmt) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Error al validar el asiento.'
+                ], 500);
+                return;
+            }
+
+            $seatStmt->bind_param('is', $newTripId, $newSeatId);
+            $seatStmt->execute();
+            $seatResult = $seatStmt->get_result();
+
+            if ($seatResult->num_rows > 0) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El asiento seleccionado ya está ocupado.'
+                ], 422);
+                return;
+            }
+
+            // Obtener el ticket actual del pasajero para actualizar seat_numbers
+            $ticketQuery = "
+                SELECT id, seat_numbers FROM tickets
+                WHERE id = ?
+                LIMIT 1
+            ";
+
+            $ticketStmt = $db->prepare($ticketQuery);
+
+            if (!$ticketStmt) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Error al obtener el ticket.'
+                ], 500);
+                return;
+            }
+
+            $ticketStmt->bind_param('i', $passenger->ticket_id);
+            $ticketStmt->execute();
+            $ticketResult = $ticketStmt->get_result();
+            $ticket = $ticketResult->fetch_assoc();
+
+            if (!$ticket) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Ticket no encontrado.'
+                ], 404);
+                return;
+            }
+
+            // Actualizar seat_numbers en la tabla tickets
+            $seatNumbers = json_decode($ticket['seat_numbers'] ?? '[]', true);
+
+            if (!is_array($seatNumbers)) {
+                $seatNumbers = [];
+            }
+
+            // Verificar si el pasajero es el único en el ticket o si hay más pasajeros
+            $hasMultiplePassengers = count($seatNumbers) > 1;
+
+            if ($hasMultiplePassengers) {
+                // El ticket tiene múltiples pasajeros, crear un nuevo ticket para este pasajero
+
+                // Remover el asiento anterior del array
+                $seatNumbers = array_filter($seatNumbers, function ($seat) use ($oldSeatId) {
+                    return $seat !== $oldSeatId;
+                });
+                // Reindexar array
+                $seatNumbers = array_values($seatNumbers);
+                $updatedSeatNumbers = json_encode($seatNumbers, JSON_UNESCAPED_UNICODE);
+
+                // Actualizar ticket anterior con el array reducido
+                $updateOldTicketQuery = "
+                    UPDATE tickets
+                    SET seat_numbers = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ";
+
+                $updateOldTicketStmt = $db->prepare($updateOldTicketQuery);
+
+                if (!$updateOldTicketStmt) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'Error al actualizar el ticket anterior.'
+                    ], 500);
+                    return;
+                }
+
+                $updateOldTicketStmt->bind_param('si', $updatedSeatNumbers, $ticket['id']);
+
+                if (!$updateOldTicketStmt->execute()) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'No se pudo actualizar el ticket anterior.'
+                    ], 500);
+                    return;
+                }
+
+                // Crear nuevo ticket para este pasajero
+                $newSeatNumbersJson = json_encode([$newSeatId], JSON_UNESCAPED_UNICODE);
+
+                $createNewTicketQuery = "
+                    INSERT INTO tickets (trip_id, seat_numbers, created_at)
+                    VALUES (?, ?, NOW())
+                ";
+
+                $createNewTicketStmt = $db->prepare($createNewTicketQuery);
+
+                if (!$createNewTicketStmt) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'Error al crear nuevo ticket.'
+                    ], 500);
+                    return;
+                }
+
+                $createNewTicketStmt->bind_param('is', $newTripId, $newSeatNumbersJson);
+
+                if (!$createNewTicketStmt->execute()) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'No se pudo crear el nuevo ticket.'
+                    ], 500);
+                    return;
+                }
+
+                $newTicketId = $createNewTicketStmt->insert_id;
+
+                // Actualizar pasajero con nuevo ticket, trip y asiento
+                $updateQuery = "
+                    UPDATE ticket_passengers
+                    SET ticket_id = ?, trip_id = ?, seat_id = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ";
+
+                $updateStmt = $db->prepare($updateQuery);
+
+                if (!$updateStmt) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'Error al reagendar el pasajero.'
+                    ], 500);
+                    return;
+                }
+
+                $updateStmt->bind_param('iisi', $newTicketId, $newTripId, $newSeatId, $passengerId);
+
+                if (!$updateStmt->execute()) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'No se pudo reagendar el pasajero.'
+                    ], 500);
+                    return;
+                }
+            } else {
+                // El ticket tiene solo un pasajero, actualizar normalmente
+
+                // Reemplazar el asiento anterior con el nuevo
+                $seatNumbers = array_map(function ($seat) use ($oldSeatId, $newSeatId) {
+                    return $seat === $oldSeatId ? $newSeatId : $seat;
+                }, $seatNumbers);
+
+                $updatedSeatNumbers = json_encode($seatNumbers, JSON_UNESCAPED_UNICODE);
+
+                // Actualizar ticket con new seat_numbers y trip_id
+                $updateTicketQuery = "
+                    UPDATE tickets
+                    SET seat_numbers = ?, trip_id = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ";
+
+                $updateTicketStmt = $db->prepare($updateTicketQuery);
+
+                if (!$updateTicketStmt) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'Error al actualizar el ticket.'
+                    ], 500);
+                    return;
+                }
+
+                $updateTicketStmt->bind_param('sii', $updatedSeatNumbers, $newTripId, $ticket['id']);
+
+                if (!$updateTicketStmt->execute()) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'No se pudo actualizar el ticket.'
+                    ], 500);
+                    return;
+                }
+
+                // Actualizar pasajero con nuevo trip y asiento
+                $updateQuery = "
+                    UPDATE ticket_passengers
+                    SET trip_id = ?, seat_id = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ";
+
+                $updateStmt = $db->prepare($updateQuery);
+
+                if (!$updateStmt) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'Error al reagendar el pasajero.'
+                    ], 500);
+                    return;
+                }
+
+                $updateStmt->bind_param('isi', $newTripId, $newSeatId, $passengerId);
+
+                if (!$updateStmt->execute()) {
+                    JsonResponse::send([
+                        'success' => false,
+                        'message' => 'No se pudo reagendar el pasajero.'
+                    ], 500);
+                    return;
+                }
+            }
+
+            // Obtener datos actualizados del pasajero
+            $updatedPassenger = TicketPassenger::find($passengerId);
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Pasajero reagendado correctamente.',
+                'data' => [
+                    'id' => (int) $updatedPassenger->id,
+                    'trip_id' => (int) $updatedPassenger->trip_id,
+                    'seat_id' => $updatedPassenger->seat_id,
+                    'first_name' => $updatedPassenger->first_name,
+                    'last_name' => $updatedPassenger->last_name,
+                    'email' => $updatedPassenger->email,
+                    'ticket_code' => $updatedPassenger->ticket_code,
+                ]
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error al reagendar pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+            return;
+        }
+    }
+
     private static function safeRollback(\mysqli $db): void
     {
         try {
