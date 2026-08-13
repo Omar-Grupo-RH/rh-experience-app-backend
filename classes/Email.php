@@ -16,6 +16,7 @@ class Email
   private string $fecha;
   private string $asientos;
   private string $tripId;
+  private string $context;
 
   public function __construct(
     string $email,
@@ -23,7 +24,8 @@ class Email
     string $subject,
     string $fecha,
     string $asientos = '',
-    string $tripId = ''
+    string $tripId = '',
+    string $context = 'reservation'
   ) {
     $this->email = $email;
     $this->nombre = $nombre;
@@ -31,6 +33,7 @@ class Email
     $this->fecha = $fecha;
     $this->asientos = $asientos;
     $this->tripId = $tripId;
+    $this->context = $context;
 
     $this->mail = new PHPMailer(true);
     $this->configurarSMTP();
@@ -108,6 +111,22 @@ class Email
 
     $year = date('Y');
 
+    $isRescheduled = $this->context === 'rescheduled';
+
+    $headerTitle = $isRescheduled ? 'Reserva reagendada' : 'Reserva confirmada';
+
+    $headerSubtitle = $isRescheduled
+      ? 'Actualizamos tu reservación. Adjuntamos tu boleto con la nueva fecha.'
+      : 'Tu aventura ya está lista. Adjuntamos tu boleto en este correo.';
+
+    $badgeText = $isRescheduled ? 'Reagendado exitosamente' : 'Confirmación exitosa';
+
+    $introText = $isRescheduled
+      ? 'Tu reservación ha sido reagendada correctamente. Por favor, checa los detalles principales para que vivas el RH Experience.'
+      : 'Tu reservación ha sido registrada correctamente. Te compartimos los detalles principales de tu RH Experience.';
+
+    $statusText = $isRescheduled ? 'Boleto actualizado' : 'Boleto generado';
+
     return <<<HTML
 <!DOCTYPE html>
 <html lang="es">
@@ -134,11 +153,11 @@ class Email
                     </p>
 
                     <h1 style="margin:0;font-size:30px;line-height:1.15;font-weight:900;color:#ffffff;">
-                      Reserva confirmada
+                      {$headerTitle}
                     </h1>
 
                     <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:rgba(255,255,255,.82);">
-                      Tu aventura ya está lista. Adjuntamos tu boleto en este correo.
+                      {$headerSubtitle}
                     </p>
                   </td>
                 </tr>
@@ -149,7 +168,7 @@ class Email
           <tr>
             <td style="padding:32px;">
               <div style="display:inline-block;background:#ecfdf5;color:#15803d;border:1px solid #bbf7d0;padding:8px 14px;border-radius:999px;font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;margin-bottom:22px;">
-                Confirmación exitosa
+                {$badgeText}
               </div>
 
               <h2 style="margin:0 0 10px;font-size:24px;line-height:1.3;color:#0f172a;font-weight:900;">
@@ -157,7 +176,7 @@ class Email
               </h2>
 
               <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#475569;">
-                Tu reservación ha sido registrada correctamente. Te compartimos los detalles principales de tu RH Experience.
+                {$introText}
               </p>
 
               <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:4px 18px;margin:24px 0;">
@@ -174,7 +193,7 @@ class Email
                 <tr>
                   <td style="padding:16px 0;">
                     <span style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em;">Estado</span>
-                    <span style="display:block;margin-top:4px;font-size:16px;font-weight:800;color:#15803d;">Boleto generado</span>
+                    <span style="display:block;margin-top:4px;font-size:16px;font-weight:800;color:#15803d;">{$statusText}</span>
                   </td>
                 </tr>
               </table>
@@ -338,12 +357,22 @@ HTML;
   {
     $year = date('Y');
 
+    $isRescheduled = $this->context === 'rescheduled';
+
+    $title = $isRescheduled
+      ? 'RESERVA REAGENDADA - RH EXPERIENCE'
+      : 'CONFIRMACIÓN DE RESERVA - RH EXPERIENCE';
+
+    $intro = $isRescheduled
+      ? 'Tu reservación ha sido reagendada correctamente. Por favor, checa los detalles principales para que vivas el RH Experience.'
+      : 'Tu reserva ha sido confirmada exitosamente.';
+
     $text = "
-CONFIRMACIÓN DE RESERVA - RH EXPERIENCE
+{$title}
 
 ¡Hola {$this->nombre}!
 
-Tu reserva ha sido confirmada exitosamente.
+{$intro}
 
 DETALLES DE LA RESERVA:
 - Fecha del viaje: {$this->fecha}

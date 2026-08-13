@@ -103,6 +103,7 @@ $router->get('/api/comments', [CommentsController::class, 'index']);
 $router->post('/api/reservation', [ReservationController::class, 'store']);
 $router->get('/api/passengerVerifyEmail', [ReservationController::class, 'passengerVerifyEmail']);
 $router->post('/api/passenger/reschedule', [ReservationController::class, 'reschedulePassenger'], true);
+$router->post('/api/passenger/resend-tickets', [ReservationController::class, 'resendPassengerTickets'], true);
 
 $router->get('/api/codes', [CodesController::class, 'index']);
 $router->get('/api/code', [CodesController::class, 'show']);

@@ -1275,179 +1275,13 @@ class ReservationController
             // Obtener datos actualizados del pasajero
             $updatedPassenger = TicketPassenger::find($passengerId);
 
-            // Obtener datos del viaje nuevo para enviar en el correo
-            $newTrip = Trip::find($newTripId);
-
-            // Obtener información de reservation_registrations
-            $registrationQuery = "
-                SELECT
-                    rr.registration_type,
-                    rr.area_code,
-                    rr.alliance_name,
-                    rr.alliance_code,
-                    rr.prize_code,
-                    rr.development,
-                    rr.stage,
-                    rr.lot_number,
-                    rr.advisor_name,
-                    rr.advisor_code,
-                    rr.origin,
-                    rr.origin_alliance_name
-                FROM reservation_registrations rr
-                WHERE rr.ticket_passenger_id = ?
-                LIMIT 1
-            ";
-
-            $registrationStmt = $db->prepare($registrationQuery);
-            $registrationData = null;
-
-            if ($registrationStmt) {
-                $registrationStmt->bind_param('i', $passengerId);
-                $registrationStmt->execute();
-                $registrationResult = $registrationStmt->get_result();
-                $registrationData = $registrationResult->fetch_assoc();
-            }
-
-            // Intentar enviar correo con nuevo boleto
             try {
-                if ($updatedPassenger && $updatedPassenger->email && $newTrip) {
-                    $payloadPdf = [
-                        'trip_data' => [
-                            'date' => $newTrip->trip_date,
-                            'tickets_name' => $newTrip->title ?? 'rh-experience',
-                            'seats' => [$newSeatId],
-                        ],
-                        'passengers' => [
-                            [
-                                'seat_id' => $newSeatId,
-                                'first_name' => $updatedPassenger->first_name ?? '',
-                                'last_name' => $updatedPassenger->last_name ?? '',
-                                'email' => $updatedPassenger->email ?? '',
-                                'phone' => $updatedPassenger->phone ?? '',
-                                'ticket_code' => $updatedPassenger->ticket_code ?? '',
-                                'registration_type' => $registrationData['registration_type'] ?? $updatedPassenger->registration_type ?? 'regular',
-                            ]
-                        ],
-                        'registration' => [
-                            'registration_type' => $registrationData['registration_type'] ?? $updatedPassenger->registration_type ?? 'regular',
-                            'area_code' => $registrationData['area_code'] ?? null,
-                            'alliance_name' => $registrationData['alliance_name'] ?? null,
-                            'alliance_code' => $registrationData['alliance_code'] ?? null,
-                            'prize_code' => $registrationData['prize_code'] ?? null,
-                            'development' => $registrationData['development'] ?? null,
-                            'stage' => $registrationData['stage'] ?? null,
-                            'lot_number' => $registrationData['lot_number'] ?? null,
-                            'advisor_name' => $registrationData['advisor_name'] ?? null,
-                            'advisor_code' => $registrationData['advisor_code'] ?? null,
-                            'origin' => $registrationData['origin'] ?? null,
-                            'origin_alliance_name' => $registrationData['origin_alliance_name'] ?? null,
-                        ]
-                    ];
-
-                    $ticketsPdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
-
-                    $email = new Email(
-                        $updatedPassenger->email,
-                        $updatedPassenger->first_name . ' ' . $updatedPassenger->last_name,
-                        'Tu Boleto Reagendado - RH Experience',
-                        $newTrip->trip_date,
-                        $newSeatId,
-                        $newTripId
-                    );
-
-                    if (file_exists($ticketsPdfPath)) {
-                        $email->addAttachment($ticketsPdfPath, 'boleto-rh.pdf');
-                    }
-
-                    // Verificar si el pasajero tiene pagos pendientes
-                    $paymentStatusQuery = "
-                        SELECT payment_status
-                        FROM ticket_passengers
-                        WHERE id = ?
-                        LIMIT 1
-                    ";
-
-                    $paymentStmt = $db->prepare($paymentStatusQuery);
-                    $paymentStatus = 'free';
-
-                    if ($paymentStmt) {
-                        $paymentStmt->bind_param('i', $passengerId);
-                        $paymentStmt->execute();
-                        $paymentResult = $paymentStmt->get_result();
-                        $paymentRow = $paymentResult->fetch_assoc();
-                        $paymentStatus = $paymentRow['payment_status'] ?? 'free';
-                    }
-
-                    // Si tiene pago pendiente, generar PDF de pago
-                    if ($paymentStatus === 'pending') {
-                        $paymentReasonMap = [
-                            'prospect' => 'Cuota de recuperación - Cliente Prospecto',
-                            'family_friend' => 'Cuota de recuperación - Familiar y Amigo',
-                            'investor' => 'Cuota de recuperación - Acompañante Inversionista',
-                            'internal' => 'Cuota de recuperación - Cliente Repetidor',
-                            'regular' => 'Pago de Boleto RH Experience'
-                        ];
-
-                        $registrationType = $registrationData['registration_type'] ?? $updatedPassenger->registration_type ?? 'regular';
-                        $paymentReason = $paymentReasonMap[$registrationType] ?? 'Pago de Boleto RH Experience';
-
-                        // Definir precio por tipo de registro
-                        $priceMap = [
-                            'prospect' => 1500,
-                            'family_friend' => 500,
-                            'investor' => 500,
-                            'internal' => 500,
-                            'regular' => 500
-                        ];
-
-                        $pricePerTicket = $priceMap[$registrationType] ?? 500;
-                        $totalAmount = $pricePerTicket;
-
-                        $paymentPdfPath = TicketPdfService::buildPaymentSlipPdf([
-                            'client_name' => $updatedPassenger->first_name . ' ' . $updatedPassenger->last_name,
-                            'client_email' => $updatedPassenger->email,
-                            'trip_date' => $newTrip->trip_date,
-                            'seats' => [$newSeatId],
-                            'tickets_count' => 1,
-                            'paid_tickets_count' => 0,
-                            'free_tickets_count' => 0,
-                            'price_per_ticket' => $pricePerTicket,
-                            'total_amount' => $totalAmount,
-                            'payment_reason' => $paymentReason,
-                            'passengers' => [
-                                [
-                                    'first_name' => $updatedPassenger->first_name ?? '',
-                                    'last_name' => $updatedPassenger->last_name ?? '',
-                                    'email' => $updatedPassenger->email ?? '',
-                                    'seat_id' => $newSeatId,
-                                    'payment_status' => 'pending',
-                                ]
-                            ],
-                            'registration' => [
-                                'registration_type' => $registrationType,
-                                'area_code' => $registrationData['area_code'] ?? null,
-                                'alliance_name' => $registrationData['alliance_name'] ?? null,
-                                'alliance_code' => $registrationData['alliance_code'] ?? null,
-                                'prize_code' => $registrationData['prize_code'] ?? null,
-                                'development' => $registrationData['development'] ?? null,
-                                'stage' => $registrationData['stage'] ?? null,
-                                'lot_number' => $registrationData['lot_number'] ?? null,
-                                'advisor_name' => $registrationData['advisor_name'] ?? null,
-                                'advisor_code' => $registrationData['advisor_code'] ?? null,
-                                'origin' => $registrationData['origin'] ?? null,
-                                'origin_alliance_name' => $registrationData['origin_alliance_name'] ?? null,
-                            ]
-                        ]);
-
-                        if ($paymentPdfPath && file_exists($paymentPdfPath)) {
-                            $email->addAttachment($paymentPdfPath, 'ficha-de-pago-rh-experience.pdf');
-                        }
-                    }
-
-                    $email->send();
-                }
+                self::sendPassengerTicketsEmail(
+                    $passengerId,
+                    'Tu Boleto Reagendado - RH Experience',
+                    'rescheduled'
+                );
             } catch (\Throwable $emailError) {
-                // Log del error pero no fallar la operación
                 error_log('Error enviando email al reagendar pasajero: ' . $emailError->getMessage());
             }
 
@@ -1474,6 +1308,231 @@ class ReservationController
             ], 500);
             return;
         }
+    }
+
+    public static function resendPassengerTickets()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+
+            if ($passengerId <= 0) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero es obligatorio.'
+                ], 400);
+                return;
+            }
+
+            $passenger = TicketPassenger::find($passengerId);
+
+            if (!$passenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            if (!$passenger->email || !filter_var($passenger->email, FILTER_VALIDATE_EMAIL)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero no tiene un correo electrónico válido.'
+                ], 422);
+                return;
+            }
+
+            $sent = self::sendPassengerTicketsEmail(
+                $passengerId,
+                'Tus Boletos RH Experience'
+            );
+
+            if (!$sent) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'No se pudo reenviar el correo del pasajero.'
+                ], 500);
+                return;
+            }
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Correo reenviado correctamente a ' . $passenger->email,
+                'data' => [
+                    'id' => (int) $passenger->id,
+                    'email' => $passenger->email,
+                ]
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error al reenviar boletos del pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al reenviar el correo del pasajero.'
+            ], 500);
+            return;
+        }
+    }
+
+    private static function sendPassengerTicketsEmail(
+        int $passengerId,
+        string $subject,
+        string $context = 'reservation'
+    ): bool {
+        $passenger = TicketPassenger::find($passengerId);
+
+        if (!$passenger || !$passenger->email) {
+            return false;
+        }
+
+        $trip = Trip::find((int) $passenger->trip_id);
+
+        if (!$trip) {
+            return false;
+        }
+
+        $registration = self::findPassengerRegistration($passengerId);
+
+        $registrationType = $registration['registration_type']
+            ?? $passenger->registration_type
+            ?? '';
+
+        $seatId = (string) $passenger->seat_id;
+        $passengerName = trim(($passenger->first_name ?? '') . ' ' . ($passenger->last_name ?? ''));
+
+        $registrationPayload = [
+            'registration_type' => $registrationType,
+            'area_code' => $registration['area_code'] ?? null,
+            'alliance_name' => $registration['alliance_name'] ?? null,
+            'alliance_code' => $registration['alliance_code'] ?? null,
+            'prize_code' => $registration['prize_code'] ?? null,
+            'development' => $registration['development'] ?? null,
+            'stage' => $registration['stage'] ?? null,
+            'lot_number' => $registration['lot_number'] ?? null,
+            'advisor_name' => $registration['advisor_name'] ?? null,
+            'advisor_code' => $registration['advisor_code'] ?? null,
+            'origin' => $registration['origin'] ?? null,
+            'origin_alliance_name' => $registration['origin_alliance_name'] ?? null,
+        ];
+
+        $ticketsPdfPath = TicketPdfService::buildTicketsPdf([
+            'trip_data' => [
+                'trip_id' => (int) $passenger->trip_id,
+                'date' => $trip->trip_date,
+                'seats' => [$seatId],
+                'tickets_name' => $passengerName,
+            ],
+            'passengers' => [
+                [
+                    'seat_id' => $seatId,
+                    'first_name' => $passenger->first_name ?? '',
+                    'last_name' => $passenger->last_name ?? '',
+                    'email' => $passenger->email ?? '',
+                    'phone_country_code' => $passenger->phone_country_code ?? '',
+                    'phone' => $passenger->phone ?? '',
+                    'city' => $passenger->city ?? '',
+                    'born_date' => $passenger->born_date ?? null,
+                    'ticket_code' => $passenger->ticket_code ?? '',
+                    'registration_type' => $registrationType,
+                ]
+            ],
+            'registration' => $registrationPayload,
+        ]);
+
+        $email = new Email(
+            $passenger->email,
+            $passengerName,
+            $subject,
+            $trip->trip_date,
+            $seatId,
+            (string) $passenger->trip_id,
+            $context
+        );
+
+        if ($ticketsPdfPath && file_exists($ticketsPdfPath)) {
+            $email->addAttachment($ticketsPdfPath, 'boletos-rh.pdf');
+        }
+
+        if (($passenger->payment_status ?? 'free') === 'pending') {
+            $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+
+            $paymentPdfPath = TicketPdfService::buildPaymentSlipPdf([
+                'client_name' => $passengerName,
+                'client_email' => $passenger->email,
+                'trip_date' => $trip->trip_date,
+                'seats' => [$seatId],
+                'tickets_count' => 1,
+                'paid_tickets_count' => 1,
+                'free_tickets_count' => 0,
+                'price_per_ticket' => $pricePerTicket,
+                'total_amount' => $pricePerTicket,
+                'payment_reason' => self::getPaymentReasonByRegistrationType($registrationType),
+                'passengers' => [
+                    [
+                        'index' => 1,
+                        'first_name' => $passenger->first_name ?? '',
+                        'last_name' => $passenger->last_name ?? '',
+                        'seat_id' => $seatId,
+                        'ticket_code' => $passenger->ticket_code ?? '',
+                        'registration_type' => $registrationType,
+                        'payment_status' => 'pending',
+                        'amount' => $pricePerTicket,
+                    ]
+                ],
+                'registration' => $registrationPayload,
+            ]);
+
+            if ($paymentPdfPath && file_exists($paymentPdfPath)) {
+                $email->addAttachment($paymentPdfPath, 'ficha-de-pago-rh-experience.pdf');
+            }
+        }
+
+        $email->send();
+
+        return true;
+    }
+
+    private static function findPassengerRegistration(int $passengerId): array
+    {
+        $db = TicketPassenger::getDB();
+
+        $stmt = $db->prepare("
+            SELECT
+                registration_type,
+                area_code,
+                alliance_name,
+                alliance_code,
+                prize_code,
+                development,
+                stage,
+                lot_number,
+                advisor_name,
+                advisor_code,
+                origin,
+                origin_alliance_name
+            FROM reservation_registrations
+            WHERE ticket_passenger_id = ?
+            LIMIT 1
+        ");
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $stmt->bind_param('i', $passengerId);
+        $stmt->execute();
+
+        return $stmt->get_result()->fetch_assoc() ?: [];
     }
 
     private static function safeRollback(\mysqli $db): void
