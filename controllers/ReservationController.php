@@ -1384,6 +1384,200 @@ class ReservationController
         }
     }
 
+    public static function deletePassenger()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        $db = TicketPassenger::getDB();
+
+        try {
+            $payload = self::readBody();
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+
+            if ($passengerId <= 0) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero es obligatorio.'
+                ], 400);
+                return;
+            }
+
+            $db->begin_transaction();
+
+            $passengerStmt = $db->prepare("
+                SELECT id, ticket_id, seat_id
+                FROM ticket_passengers
+                WHERE id = ?
+                LIMIT 1
+                FOR UPDATE
+            ");
+
+            if (!$passengerStmt) {
+                throw new \Exception('No se pudo preparar la eliminación del pasajero.');
+            }
+
+            $passengerStmt->bind_param('i', $passengerId);
+            $passengerStmt->execute();
+            $passenger = $passengerStmt->get_result()->fetch_assoc();
+
+            if (!$passenger) {
+                $db->rollback();
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $ticketStmt = $db->prepare("
+                SELECT id, seat_numbers
+                FROM tickets
+                WHERE id = ?
+                LIMIT 1
+                FOR UPDATE
+            ");
+
+            if (!$ticketStmt) {
+                throw new \Exception('No se pudo preparar la actualización del ticket.');
+            }
+
+            $ticketId = (int) $passenger['ticket_id'];
+            $ticketStmt->bind_param('i', $ticketId);
+            $ticketStmt->execute();
+            $ticket = $ticketStmt->get_result()->fetch_assoc();
+
+            if (!$ticket) {
+                throw new \Exception('Ticket no encontrado.');
+            }
+
+            $seatNumbers = json_decode($ticket['seat_numbers'] ?? '[]', true);
+            $seatNumbers = is_array($seatNumbers) ? $seatNumbers : [];
+            $passengerSeat = (string) $passenger['seat_id'];
+
+            $remainingSeats = array_values(array_filter(
+                $seatNumbers,
+                static fn($seat) => (string) $seat !== $passengerSeat
+            ));
+
+            if (!empty($remainingSeats)) {
+                $updatedSeatNumbers = json_encode(
+                    $remainingSeats,
+                    JSON_UNESCAPED_UNICODE
+                );
+
+                $updateTicketStmt = $db->prepare("
+                    UPDATE tickets
+                    SET seat_numbers = ?
+                    WHERE id = ?
+                    LIMIT 1
+                ");
+
+                if (!$updateTicketStmt) {
+                    throw new \Exception('No se pudo liberar el asiento.');
+                }
+
+                $updateTicketStmt->bind_param('si', $updatedSeatNumbers, $ticketId);
+
+                if (!$updateTicketStmt->execute()) {
+                    throw new \Exception('No se pudo liberar el asiento.');
+                }
+            }
+
+            $registrationStmt = $db->prepare("
+                DELETE FROM reservation_registrations
+                WHERE ticket_passenger_id = ?
+            ");
+
+            if (!$registrationStmt) {
+                throw new \Exception('No se pudo eliminar la información de inscripción.');
+            }
+
+            $registrationStmt->bind_param('i', $passengerId);
+
+            if (!$registrationStmt->execute()) {
+                throw new \Exception('No se pudo eliminar la información de inscripción.');
+            }
+
+            $deletePassengerStmt = $db->prepare("
+                DELETE FROM ticket_passengers
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            if (!$deletePassengerStmt) {
+                throw new \Exception('No se pudo eliminar el pasajero.');
+            }
+
+            $deletePassengerStmt->bind_param('i', $passengerId);
+
+            if (!$deletePassengerStmt->execute()) {
+                throw new \Exception('No se pudo eliminar el pasajero.');
+            }
+
+            if (empty($remainingSeats)) {
+                $deleteOrderStmt = $db->prepare("
+                    DELETE FROM orders
+                    WHERE ticket_id = ?
+                ");
+
+                if (!$deleteOrderStmt) {
+                    throw new \Exception('No se pudo eliminar la orden del ticket.');
+                }
+
+                $deleteOrderStmt->bind_param('i', $ticketId);
+
+                if (!$deleteOrderStmt->execute()) {
+                    throw new \Exception('No se pudo eliminar la orden del ticket.');
+                }
+
+                $deleteTicketStmt = $db->prepare("
+                    DELETE FROM tickets
+                    WHERE id = ?
+                    LIMIT 1
+                ");
+
+                if (!$deleteTicketStmt) {
+                    throw new \Exception('No se pudo eliminar el ticket vacío.');
+                }
+
+                $deleteTicketStmt->bind_param('i', $ticketId);
+
+                if (!$deleteTicketStmt->execute()) {
+                    throw new \Exception('No se pudo eliminar el ticket vacío.');
+                }
+            }
+
+            $db->commit();
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Pasajero eliminado y asiento liberado correctamente.',
+                'data' => [
+                    'id' => $passengerId,
+                    'ticket_id' => $ticketId,
+                    'seat_id' => $passengerSeat,
+                    'remaining_seats' => $remainingSeats,
+                ]
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            self::safeRollback($db);
+            error_log('Error al eliminar pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'No se pudo eliminar el pasajero ni liberar su asiento.'
+            ], 500);
+            return;
+        }
+    }
+
     private static function sendPassengerTicketsEmail(
         int $passengerId,
         string $subject,
