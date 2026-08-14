@@ -105,6 +105,7 @@ $router->get('/api/passengerVerifyEmail', [ReservationController::class, 'passen
 $router->post('/api/passenger/reschedule', [ReservationController::class, 'reschedulePassenger'], true);
 $router->post('/api/passenger/resend-tickets', [ReservationController::class, 'resendPassengerTickets'], true);
 $router->post('/api/passenger/delete', [ReservationController::class, 'deletePassenger'], true);
+$router->post('/api/passenger/attendance', [ReservationController::class, 'updateAttendanceStatus'], true);
 
 $router->get('/api/codes', [CodesController::class, 'index']);
 $router->get('/api/code', [CodesController::class, 'show']);

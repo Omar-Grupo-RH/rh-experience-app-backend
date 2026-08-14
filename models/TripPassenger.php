@@ -21,6 +21,7 @@ class TripPassenger extends ActiveRecord
         'created_at',
         'city',
         'health_conditions',
+        'attendance_status',
 
         'registration_id',
         'registration_type',
@@ -53,6 +54,7 @@ class TripPassenger extends ActiveRecord
     public $born_date;
     public $allergies;
     public $health_conditions;
+    public $attendance_status;
     public $created_at;
     public $city;
     public $registration_id;
@@ -88,6 +90,7 @@ class TripPassenger extends ActiveRecord
         $this->born_date = $args['born_date'] ?? null;
         $this->allergies = $args['allergies'] ?? '[]';
         $this->health_conditions = $args['health_conditions'] ?? '[]';
+        $this->attendance_status = $args['attendance_status'] ?? 'ausencia';
         $this->created_at = $args['created_at'] ?? null;
         $this->city = $args['city'] ?? '';
         $this->registration_id = $args['registration_id'] ?? null;
@@ -133,6 +136,7 @@ class TripPassenger extends ActiveRecord
             tp.born_date,
             tp.allergies,
             tp.health_conditions,    
+            COALESCE(tp.attendance_status, 'ausencia') AS attendance_status,
             tp.created_at,
             tp.city,
 

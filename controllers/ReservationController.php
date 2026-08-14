@@ -1578,6 +1578,100 @@ class ReservationController
         }
     }
 
+    public static function updateAttendanceStatus()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+            $attendanceStatus = trim((string) ($payload['attendance_status'] ?? ''));
+
+            $allowedStatuses = [
+                'no_show_interno',
+                'ausencia_justificada',
+                'ausencia',
+                'asistio',
+            ];
+
+            if ($passengerId <= 0 || !in_array($attendanceStatus, $allowedStatuses, true)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero o el estado de asistencia no es válido.'
+                ], 422);
+                return;
+            }
+
+            $db = TicketPassenger::getDB();
+            $existsStmt = $db->prepare(" 
+                SELECT id
+                FROM ticket_passengers
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            if (!$existsStmt) {
+                throw new \Exception('No se pudo validar el pasajero.');
+            }
+
+            $existsStmt->bind_param('i', $passengerId);
+            $existsStmt->execute();
+
+            if (!$existsStmt->get_result()->fetch_assoc()) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $stmt = $db->prepare("
+                UPDATE ticket_passengers
+                SET attendance_status = ?
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            if (!$stmt) {
+                throw new \Exception('No se pudo preparar la actualización de asistencia.');
+            }
+
+            $stmt->bind_param('si', $attendanceStatus, $passengerId);
+
+            if (!$stmt->execute()) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'No se pudo actualizar la asistencia del pasajero.'
+                ], 404);
+                return;
+            }
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Asistencia actualizada correctamente.',
+                'data' => [
+                    'id' => $passengerId,
+                    'attendance_status' => $attendanceStatus,
+                ]
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error al actualizar asistencia: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'No se pudo actualizar la asistencia del pasajero.'
+            ], 500);
+            return;
+        }
+    }
+
     private static function sendPassengerTicketsEmail(
         int $passengerId,
         string $subject,
