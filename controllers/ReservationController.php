@@ -1790,6 +1790,148 @@ class ReservationController
         return true;
     }
 
+    public static function downloadPassengerDocuments()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+
+            if ($passengerId <= 0) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero es obligatorio.'
+                ], 400);
+                return;
+            }
+
+            $passenger = TicketPassenger::find($passengerId);
+
+            if (!$passenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $trip = Trip::find((int) $passenger->trip_id);
+
+            if (!$trip) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Viaje no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $registration = self::findPassengerRegistration($passengerId);
+            $registrationType = $registration['registration_type'] ?? $passenger->registration_type ?? '';
+            $seatId = (string) $passenger->seat_id;
+            $passengerName = trim(($passenger->first_name ?? '') . ' ' . ($passenger->last_name ?? ''));
+
+            $registrationPayload = [
+                'registration_type' => $registrationType,
+                'area_code' => $registration['area_code'] ?? null,
+                'alliance_name' => $registration['alliance_name'] ?? null,
+                'alliance_code' => $registration['alliance_code'] ?? null,
+                'prize_code' => $registration['prize_code'] ?? null,
+                'development' => $registration['development'] ?? null,
+                'stage' => $registration['stage'] ?? null,
+                'lot_number' => $registration['lot_number'] ?? null,
+                'advisor_name' => $registration['advisor_name'] ?? null,
+                'advisor_code' => $registration['advisor_code'] ?? null,
+                'origin' => $registration['origin'] ?? null,
+                'origin_alliance_name' => $registration['origin_alliance_name'] ?? null,
+            ];
+
+            $documentsPayload = [
+                'file_label' => $passengerName ?: 'pasajero',
+                'tickets' => [
+                    'trip_data' => [
+                        'trip_id' => (int) $passenger->trip_id,
+                        'date' => $trip->trip_date,
+                        'seats' => [$seatId],
+                        'tickets_name' => $passengerName,
+                    ],
+                    'passengers' => [
+                        [
+                            'seat_id' => $seatId,
+                            'first_name' => $passenger->first_name ?? '',
+                            'last_name' => $passenger->last_name ?? '',
+                            'email' => $passenger->email ?? '',
+                            'phone' => $passenger->phone ?? '',
+                            'ticket_code' => $passenger->ticket_code ?? '',
+                            'registration_type' => $registrationType,
+                        ]
+                    ],
+                    'registration' => $registrationPayload,
+                ],
+            ];
+
+            if (($passenger->payment_status ?? 'free') === 'pending') {
+                $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+
+                $documentsPayload['payment_slip'] = [
+                    'client_name' => $passengerName,
+                    'client_email' => $passenger->email,
+                    'trip_date' => $trip->trip_date,
+                    'seats' => [$seatId],
+                    'tickets_count' => 1,
+                    'price_per_ticket' => $pricePerTicket,
+                    'total_amount' => $pricePerTicket,
+                    'passengers' => [
+                        [
+                            'index' => 1,
+                            'first_name' => $passenger->first_name ?? '',
+                            'last_name' => $passenger->last_name ?? '',
+                            'seat_id' => $seatId,
+                            'registration_type' => $registrationType,
+                            'payment_status' => 'pending',
+                            'amount' => $pricePerTicket,
+                        ]
+                    ],
+                    'registration' => $registrationPayload,
+                ];
+            }
+
+            $pdfPath = TicketPdfService::buildPassengerDocumentsPdf($documentsPayload);
+
+            if (!$pdfPath || !file_exists($pdfPath)) {
+                throw new \Exception('No se pudo generar el documento del pasajero.');
+            }
+
+            $fileContents = file_get_contents($pdfPath);
+            $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '-', $passengerName ?: 'pasajero');
+            $downloadName = 'RH-Documentos-' . trim($safeName, '-') . '.pdf';
+
+            if (ob_get_length()) {
+                ob_clean();
+            }
+
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: attachment; filename="' . $downloadName . '"');
+            header('Content-Length: ' . strlen($fileContents));
+            echo $fileContents;
+            exit;
+        } catch (\Throwable $e) {
+            error_log('Error al generar documentos del pasajero: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'No se pudo generar el documento del pasajero.'
+            ], 500);
+            return;
+        }
+    }
+
     private static function findPassengerRegistration(int $passengerId): array
     {
         $db = TicketPassenger::getDB();

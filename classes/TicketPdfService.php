@@ -123,8 +123,102 @@ class TicketPdfService
     return $filename;
   }
 
+  /**
+   * Genera un único PDF descargable con la ficha de pago (si aplica) seguida
+   * de los boletos, para un pasajero específico.
+   */
+  public static function buildPassengerDocumentsPdf(array $payload, string $outputDir = '../public/tickets'): string
+  {
+    if (!is_dir($outputDir)) {
+      @mkdir($outputDir, 0775, true);
+    }
+
+    $fileLabel = $payload['file_label'] ?? 'rh-experience';
+    $paymentSlip = $payload['payment_slip'] ?? null;
+    $tickets = $payload['tickets'] ?? [];
+
+    $html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+      . '<title>Documentos RH Experience</title>'
+      . self::ticketStyleBlock()
+      . self::paymentSlipStyleBlock()
+      . '</head><body>';
+
+    if (is_array($paymentSlip)) {
+      $html .= self::paymentSlipBodyHtml([
+        'client_name' => $paymentSlip['client_name'] ?? 'Cliente',
+        'client_email' => $paymentSlip['client_email'] ?? '',
+        'trip_date' => $paymentSlip['trip_date'] ?? '',
+        'seats' => $paymentSlip['seats'] ?? [],
+        'tickets_count' => (int) ($paymentSlip['tickets_count'] ?? 1),
+        'price_per_ticket' => (float) ($paymentSlip['price_per_ticket'] ?? 0),
+        'total_amount' => (float) ($paymentSlip['total_amount'] ?? 0),
+        'passengers' => $paymentSlip['passengers'] ?? [],
+        'registration' => $paymentSlip['registration'] ?? [],
+      ]);
+
+      $html .= '<div class="pagebreak"></div>';
+    }
+
+    $ticketDate = $tickets['trip_data']['date'] ?? '';
+    $ticketsName = $tickets['trip_data']['tickets_name'] ?? 'rh-experience';
+    $ticketPassengers = $tickets['passengers'] ?? [];
+    $ticketSeats = $tickets['trip_data']['seats'] ?? [];
+    $ticketRegistration = $tickets['registration'] ?? [];
+    $globalRegistrationType = $ticketRegistration['registration_type'] ?? '';
+    $totalPassengers = count($ticketPassengers);
+
+    foreach ($ticketPassengers as $idx => $pax) {
+      $seatId = $pax['seat_id'] ?? ($ticketSeats[$idx] ?? '');
+      $ticketCode = trim($pax['ticket_code'] ?? '') ?: 'SIN-CODIGO';
+      $registrationType = $pax['registration_type'] ?? $globalRegistrationType;
+      $clientTypeLabel = self::getRegistrationTypeLabel($registrationType);
+
+      $html .= self::ticketPageHtml([
+        'date' => $ticketDate,
+        'date_label' => self::formatDateForTicket($ticketDate),
+        'seat_id' => $seatId,
+        'first_name' => $pax['first_name'] ?? '',
+        'last_name' => $pax['last_name'] ?? '',
+        'email' => $pax['email'] ?? '',
+        'phone' => $pax['phone'] ?? '',
+        'index' => $idx + 1,
+        'count' => $totalPassengers,
+        'ticket_code' => $ticketCode,
+        'is_last' => ($idx + 1) === $totalPassengers,
+        'client_type' => $registrationType,
+        'client_type_label' => $clientTypeLabel,
+      ]);
+    }
+
+    $html .= '</body></html>';
+
+    $options = new Options();
+    $options->set('isRemoteEnabled', true);
+    $options->set('defaultFont', 'DejaVu Sans');
+
+    $dompdf = new Dompdf($options);
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    $safeName = self::safeFilename($fileLabel);
+
+    $filename = sprintf(
+      '%s/RH-Documentos-%s-%s.pdf',
+      rtrim($outputDir, '/'),
+      $safeName,
+      date('YmdHis')
+    );
+
+    file_put_contents($filename, $dompdf->output());
+
+    return $filename;
+  }
+
   private static function buildHtmlHeader(string $title): string
   {
+    $style = self::ticketStyleBlock();
+
     return <<<HTML
 <!DOCTYPE html>
 <html lang="es">
@@ -132,6 +226,16 @@ class TicketPdfService
 <meta charset="UTF-8">
 <title>{$title}</title>
 
+{$style}
+</head>
+
+<body>
+HTML;
+  }
+
+  private static function ticketStyleBlock(): string
+  {
+    return <<<HTML
 <style>
   @page {
     margin: 24pt;
@@ -415,9 +519,6 @@ class TicketPdfService
     font-size: 10px;
   }
 </style>
-</head>
-
-<body>
 HTML;
   }
 
@@ -576,71 +677,8 @@ HTML;
 
   private static function buildPaymentSlipHtml(array $d): string
   {
-    $clientName = htmlspecialchars($d['client_name'] ?? 'Cliente', ENT_QUOTES, 'UTF-8');
-    $clientEmail = htmlspecialchars($d['client_email'] ?? '', ENT_QUOTES, 'UTF-8');
-    $tripDate = htmlspecialchars($d['trip_date'] ?? '', ENT_QUOTES, 'UTF-8');
-
-    $seats = is_array($d['seats'] ?? null)
-      ? implode(', ', $d['seats'])
-      : ($d['seats'] ?? '');
-
-    $seats = htmlspecialchars($seats, ENT_QUOTES, 'UTF-8');
-
-    $ticketsCount = (int) ($d['tickets_count'] ?? 1);
-    $pricePerTicket = (float) ($d['price_per_ticket'] ?? 0);
-    $totalAmount = (float) ($d['total_amount'] ?? 0);
-
-    $totalFormatted = '$' . number_format($totalAmount, 2) . ' MXN';
-
-    $registration = $d['registration'] ?? [];
-
-    $development = htmlspecialchars($registration['development'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
-    $advisorName = htmlspecialchars($registration['advisor_name'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
-    $advisorCode = htmlspecialchars($registration['advisor_code'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
-    $origin = htmlspecialchars($registration['origin'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
-
-    $passengersHtml = '';
-
-    foreach (($d['passengers'] ?? []) as $index => $p) {
-      $fullName = htmlspecialchars(
-        trim(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')),
-        ENT_QUOTES,
-        'UTF-8'
-      );
-
-      $seatId = htmlspecialchars($p['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
-      $paymentStatus = $p['payment_status'] ?? 'free';
-
-      $passengerRegistrationType =
-        $p['registration_type']
-        ?? $p['client_type']
-        ?? $registration['registration_type']
-        ?? '';
-
-      $clientTypeLabel = htmlspecialchars(
-        self::getRegistrationTypeLabel($passengerRegistrationType),
-        ENT_QUOTES,
-        'UTF-8'
-      );
-
-      if (array_key_exists('amount', $p)) {
-        $amount = (float) $p['amount'];
-      } else {
-        $amount = $paymentStatus === 'free' ? 0 : $pricePerTicket;
-      }
-
-      $amountFormatted = '$' . number_format($amount, 2) . ' MXN';
-
-      $passengersHtml .= "
-                <tr>
-                    <td>" . ($index + 1) . "</td>
-                    <td>{$fullName}</td>
-                    <td>{$clientTypeLabel}</td>
-                    <td>{$seatId}</td>
-                    <td>{$amountFormatted}</td>
-                </tr>
-            ";
-    }
+    $style = self::paymentSlipStyleBlock();
+    $body = self::paymentSlipBodyHtml($d);
 
     return <<<HTML
 <!DOCTYPE html>
@@ -648,6 +686,19 @@ HTML;
 <head>
 <meta charset="UTF-8">
 <title>Ficha de pago RH Experience</title>
+{$style}
+</head>
+
+<body>
+{$body}
+</body>
+</html>
+HTML;
+  }
+
+  private static function paymentSlipStyleBlock(): string
+  {
+    return <<<HTML
 <style>
   @page { margin: 28pt; }
 
@@ -775,9 +826,77 @@ HTML;
     text-align: center;
   }
 </style>
-</head>
+HTML;
+  }
 
-<body>
+  private static function paymentSlipBodyHtml(array $d): string
+  {
+    $clientName = htmlspecialchars($d['client_name'] ?? 'Cliente', ENT_QUOTES, 'UTF-8');
+    $clientEmail = htmlspecialchars($d['client_email'] ?? '', ENT_QUOTES, 'UTF-8');
+    $tripDate = htmlspecialchars($d['trip_date'] ?? '', ENT_QUOTES, 'UTF-8');
+
+    $seats = is_array($d['seats'] ?? null)
+      ? implode(', ', $d['seats'])
+      : ($d['seats'] ?? '');
+
+    $seats = htmlspecialchars($seats, ENT_QUOTES, 'UTF-8');
+
+    $totalAmount = (float) ($d['total_amount'] ?? 0);
+    $pricePerTicket = (float) ($d['price_per_ticket'] ?? 0);
+
+    $totalFormatted = '$' . number_format($totalAmount, 2) . ' MXN';
+
+    $registration = $d['registration'] ?? [];
+
+    $development = htmlspecialchars($registration['development'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
+    $advisorName = htmlspecialchars($registration['advisor_name'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
+    $advisorCode = htmlspecialchars($registration['advisor_code'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
+    $origin = htmlspecialchars($registration['origin'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
+
+    $passengersHtml = '';
+
+    foreach (($d['passengers'] ?? []) as $index => $p) {
+      $fullName = htmlspecialchars(
+        trim(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')),
+        ENT_QUOTES,
+        'UTF-8'
+      );
+
+      $seatId = htmlspecialchars($p['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
+      $paymentStatus = $p['payment_status'] ?? 'free';
+
+      $passengerRegistrationType =
+        $p['registration_type']
+        ?? $p['client_type']
+        ?? $registration['registration_type']
+        ?? '';
+
+      $clientTypeLabel = htmlspecialchars(
+        self::getRegistrationTypeLabel($passengerRegistrationType),
+        ENT_QUOTES,
+        'UTF-8'
+      );
+
+      if (array_key_exists('amount', $p)) {
+        $amount = (float) $p['amount'];
+      } else {
+        $amount = $paymentStatus === 'free' ? 0 : $pricePerTicket;
+      }
+
+      $amountFormatted = '$' . number_format($amount, 2) . ' MXN';
+
+      $passengersHtml .= "
+                <tr>
+                    <td>" . ($index + 1) . "</td>
+                    <td>{$fullName}</td>
+                    <td>{$clientTypeLabel}</td>
+                    <td>{$seatId}</td>
+                    <td>{$amountFormatted}</td>
+                </tr>
+            ";
+    }
+
+    return <<<HTML
   <div class="header">
     <div class="brand">RH Experience</div>
     <div class="subtitle">Ficha de pago RH Experience</div>
@@ -859,8 +978,6 @@ HTML;
   <div class="footer">
     Este documento fue generado automáticamente por RH Experience.
   </div>
-</body>
-</html>
 HTML;
   }
 

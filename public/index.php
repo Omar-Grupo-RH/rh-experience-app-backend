@@ -1,9 +1,4 @@
 <?php
-// ======================================
-// 🛡️ CORS GLOBAL (antes de despachar rutas)
-// =====================================
-
-// Lista blanca (incluye esquema + host + puerto)
 $allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:4321',
@@ -13,16 +8,13 @@ $allowedOrigins = [
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 $isAllowed = in_array($origin, $allowedOrigins, true);
 
-// Si el Origin es válido, refléjalo
 if ($isAllowed) {
     header("Access-Control-Allow-Origin: {$origin}");
     header('Access-Control-Allow-Credentials: true');
 }
 
-// Siempre variar por Origin para caches
 header('Vary: Origin');
 
-// Headers comunes
 header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With,Idempotency-Key');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 
@@ -31,7 +23,6 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Cache-Control: post-check=0, pre-check=0', false);
 header('Pragma: no-cache');
 header('Expires: 0');
-
 
 // Preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -64,8 +55,6 @@ use Controllers\TripController;
 use MVC\Router;
 
 $router = new Router();
-
-// === Rutas ===
 
 // Login / Logout
 $router->post('/api/login', [LoginController::class, 'login']);
@@ -106,6 +95,7 @@ $router->post('/api/passenger/reschedule', [ReservationController::class, 'resch
 $router->post('/api/passenger/resend-tickets', [ReservationController::class, 'resendPassengerTickets'], true);
 $router->post('/api/passenger/delete', [ReservationController::class, 'deletePassenger'], true);
 $router->post('/api/passenger/attendance', [ReservationController::class, 'updateAttendanceStatus'], true);
+$router->post('/api/passenger/documents', [ReservationController::class, 'downloadPassengerDocuments'], true);
 
 $router->get('/api/codes', [CodesController::class, 'index']);
 $router->get('/api/code', [CodesController::class, 'show']);
