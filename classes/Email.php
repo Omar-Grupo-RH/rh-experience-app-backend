@@ -207,7 +207,7 @@ class Email
 
                     <p style="margin:0;font-size:14px;line-height:1.7;color:#7c2d12;">
                       <a href="https://maps.app.goo.gl/w822T4dPZ1JaKc6N6" target="_blank"><strong>Oficinas de Grupo RH</strong><br></a>
-                      Te recomendamos llegar 10 minutos antes de la hora de salida.
+                      El experience se realiza de 9:00 AM a 6:30 PM.<br>Te recomendamos llegar 10 minutos antes para aprovechar al máximo la experiencia.
                     </p>
                   </td>
                 </tr>
