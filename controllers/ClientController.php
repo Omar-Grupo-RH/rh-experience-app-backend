@@ -165,14 +165,15 @@ class ClientController
         // unicidad de email (sólo si viene y cambió)
         if (!empty($payload['username']) && $payload['username'] !== $user->username) {
             $usernameExist = Client::where('username', $payload['username']);
-            if ($usernameExist && (int)$usernameExist->id !== (int)$client->id) {
+            if ($usernameExist && (int)$usernameExist->id !== (int)$user->id) {
                 JsonResponse::send(['success' => false, 'message' => 'El correo ya está en uso.'], 422);
             }
         }
 
         $user->username = trim($payload['username']);
         $user->full_name = trim($payload['full_name']);
-
+        $user->admin = $payload['admin'] ?? $user->admin;
+                                
         // password opcional + hash
         if (!empty($payload['password'])) {
             $user->password = password_hash($payload['password'], PASSWORD_BCRYPT);
