@@ -782,7 +782,7 @@ HTML;
   table.passengers {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 10px;
   }
 
   table.passengers th {
@@ -795,6 +795,22 @@ HTML;
   table.passengers td {
     padding: 9px;
     border-bottom: 1px solid #e5e7eb;
+  }
+
+  .passenger-email {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 8px;
+  }
+
+  .penalty-amount {
+    color: #be123c;
+    font-weight: 800;
+  }
+
+  .no-penalty {
+    color: #64748b;
   }
 
   .total-box {
@@ -810,6 +826,18 @@ HTML;
     color: #1d4ed8;
     font-weight: 700;
     text-transform: uppercase;
+  }
+
+  .total-breakdown {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #334155;
+  }
+
+  .penalty-total {
+    color: #be123c;
+    font-weight: 800;
   }
 
   .total-amount {
@@ -854,6 +882,8 @@ HTML;
     $origin = htmlspecialchars($registration['origin'] ?? 'No registrado', ENT_QUOTES, 'UTF-8');
 
     $passengersHtml = '';
+    $baseTotalAmount = 0;
+    $penaltyTotalAmount = 0;
 
     foreach (($d['passengers'] ?? []) as $index => $p) {
       $fullName = htmlspecialchars(
@@ -861,6 +891,7 @@ HTML;
         ENT_QUOTES,
         'UTF-8'
       );
+      $email = htmlspecialchars($p['email'] ?? '', ENT_QUOTES, 'UTF-8');
 
       $seatId = htmlspecialchars($p['seat_id'] ?? '', ENT_QUOTES, 'UTF-8');
       $paymentStatus = $p['payment_status'] ?? 'free';
@@ -883,18 +914,36 @@ HTML;
         $amount = $paymentStatus === 'free' ? 0 : $pricePerTicket;
       }
 
+      $penaltyAmount = max(0, (float) ($p['penalty_amount'] ?? 0));
+      $baseAmount = array_key_exists('base_amount', $p)
+        ? max(0, (float) $p['base_amount'])
+        : max(0, $amount - $penaltyAmount);
+
+      $baseTotalAmount += $baseAmount;
+      $penaltyTotalAmount += $penaltyAmount;
+
+      $baseAmountFormatted = '$' . number_format($baseAmount, 2) . ' MXN';
+      $penaltyAmountFormatted = $penaltyAmount > 0
+        ? '$' . number_format($penaltyAmount, 2) . ' MXN'
+        : 'Sin multa';
       $amountFormatted = '$' . number_format($amount, 2) . ' MXN';
+      $penaltyClass = $penaltyAmount > 0 ? 'penalty-amount' : 'no-penalty';
 
       $passengersHtml .= "
                 <tr>
                     <td>" . ($index + 1) . "</td>
-                    <td>{$fullName}</td>
+                    <td>{$fullName}<span class='passenger-email'>{$email}</span></td>
                     <td>{$clientTypeLabel}</td>
                     <td>{$seatId}</td>
-                    <td>{$amountFormatted}</td>
+                    <td>{$baseAmountFormatted}</td>
+                    <td class='{$penaltyClass}'>{$penaltyAmountFormatted}</td>
+                    <td><strong>{$amountFormatted}</strong></td>
                 </tr>
             ";
     }
+
+    $baseTotalFormatted = '$' . number_format($baseTotalAmount, 2) . ' MXN';
+    $penaltyTotalFormatted = '$' . number_format($penaltyTotalAmount, 2) . ' MXN';
 
     return <<<HTML
   <div class="header">
@@ -961,7 +1010,9 @@ HTML;
           <th>Pasajero</th>
           <th>Tipo de cliente</th>
           <th>Asiento</th>
-          <th>Importe</th>
+          <th>Boleto</th>
+          <th>Multa</th>
+          <th>Subtotal</th>
         </tr>
       </thead>
       <tbody>
@@ -971,6 +1022,10 @@ HTML;
   </div>
 
   <div class="total-box">
+    <div class="total-breakdown">
+      <div>Precio base de boletos: <strong>{$baseTotalFormatted}</strong></div>
+      <div class="penalty-total">Multas por inasistencia: {$penaltyTotalFormatted}</div>
+    </div>
     <div class="total-label">Total a pagar</div>
     <div class="total-amount">{$totalFormatted}</div>
   </div>

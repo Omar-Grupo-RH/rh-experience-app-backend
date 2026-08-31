@@ -17,6 +17,7 @@ class Email
   private string $asientos;
   private string $tripId;
   private string $context;
+  private string $paymentNotice;
 
   public function __construct(
     string $email,
@@ -25,7 +26,8 @@ class Email
     string $fecha,
     string $asientos = '',
     string $tripId = '',
-    string $context = 'reservation'
+    string $context = 'reservation',
+    string $paymentNotice = ''
   ) {
     $this->email = $email;
     $this->nombre = $nombre;
@@ -34,6 +36,7 @@ class Email
     $this->asientos = $asientos;
     $this->tripId = $tripId;
     $this->context = $context;
+    $this->paymentNotice = $paymentNotice;
 
     $this->mail = new PHPMailer(true);
     $this->configurarSMTP();
@@ -90,6 +93,7 @@ class Email
     $fecha = htmlspecialchars($this->fecha ?? '', ENT_QUOTES, 'UTF-8');
     $asientos = htmlspecialchars($this->asientos ?? '', ENT_QUOTES, 'UTF-8');
     $tripId = htmlspecialchars($this->tripId ?? '', ENT_QUOTES, 'UTF-8');
+    $paymentNotice = htmlspecialchars($this->paymentNotice ?? '', ENT_QUOTES, 'UTF-8');
 
     $asientosHtml = $this->asientos ? "
       <tr>
@@ -107,6 +111,21 @@ class Email
           <span style='display:block;margin-top:4px;font-size:16px;font-weight:800;color:#111827;'>#{$tripId}</span>
         </td>
       </tr>
+    " : "";
+
+    $paymentNoticeHtml = $this->paymentNotice ? "
+      <table width='100%' cellpadding='0' cellspacing='0' style='margin:24px 0;'>
+        <tr>
+          <td style='background:#fff1f2;border:1px solid #fecdd3;border-radius:18px;padding:20px;'>
+            <h3 style='margin:0 0 10px;font-size:17px;color:#9f1239;font-weight:900;'>
+              Motivo del cobro
+            </h3>
+            <p style='margin:0;font-size:14px;line-height:1.7;color:#9f1239;'>
+              {$paymentNotice}
+            </p>
+          </td>
+        </tr>
+      </table>
     " : "";
 
     $year = date('Y');
@@ -197,6 +216,8 @@ class Email
                   </td>
                 </tr>
               </table>
+
+              {$paymentNoticeHtml}
 
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
                 <tr>
@@ -384,6 +405,10 @@ DETALLES DE LA RESERVA:
 
     if ($this->tripId) {
       $text .= "- ID de reserva: #{$this->tripId}\n";
+    }
+
+    if ($this->paymentNotice) {
+      $text .= "\nMOTIVO DEL COBRO:\n{$this->paymentNotice}\n";
     }
 
     $text .= "

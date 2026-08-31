@@ -15,6 +15,8 @@ use Model\TripPassenger;
 
 class ReservationController
 {
+    private const NO_SHOW_PENALTY_AMOUNT = 500;
+
     public static function store()
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -105,6 +107,9 @@ class ReservationController
                     $index,
                     $p
                 );
+                $penaltyAmount = TicketPassenger::passengerRequiresNoShowPenalty(
+                    trim($p['email'] ?? '')
+                ) ? self::NO_SHOW_PENALTY_AMOUNT : 0;
                 $phoneCountryCode = preg_replace('/\D/', '', trim($p['phone_country_code'] ?? '52'));
                 $phone = preg_replace('/\D/', '', trim($p['phone'] ?? ''));
                 $passenger = new TicketPassenger([
@@ -112,6 +117,7 @@ class ReservationController
                     'trip_id' => $tripId,
                     'ticket_code' => $ticketCode,
                     'payment_status' => $paymentStatus,
+                    'penalty_amount' => $penaltyAmount,
                     'seat_id' => $seatId,
                     'first_name' => trim($p['first_name'] ?? ''),
                     'last_name' => trim($p['last_name'] ?? ''),
@@ -138,6 +144,7 @@ class ReservationController
                 $payload['passengers'][$index]['seat_id'] = $seatId;
                 $payload['passengers'][$index]['ticket_code'] = $ticketCode;
                 $payload['passengers'][$index]['payment_status'] = $paymentStatus;
+                $payload['passengers'][$index]['penalty_amount'] = $penaltyAmount;
                 $payload['passengers'][$index]['paid_at'] = null;
                 $payload['passengers'][$index]['paid_by'] = null;
                 $payload['passengers'][$index]['registration_type'] = $registrationType;
@@ -500,12 +507,15 @@ class ReservationController
                 return;
             }
 
+            $noShowCount = TicketPassenger::passengerNoShowCount($emailPassenger);
             $passenger = TripPassenger::where('email', $emailPassenger);
 
             if ($passenger) {
                 JsonResponse::send([
                     'success' => true,
                     'exists' => true,
+                    'no_show_count' => $noShowCount,
+                    'requires_no_show_penalty' => $noShowCount >= 2,
                     'message' => 'Este pasajero ya ha sido registrado anteriormente.',
                     'passenger' => [
                         'id' => $passenger->id ?? null,
@@ -522,6 +532,8 @@ class ReservationController
             JsonResponse::send([
                 'success' => true,
                 'exists' => false,
+                'no_show_count' => $noShowCount,
+                'requires_no_show_penalty' => $noShowCount >= 2,
                 'message' => 'Este pasajero aún no ha sido registrado.',
                 'passenger' => null,
             ], 200);
@@ -833,39 +845,62 @@ class ReservationController
 
         $ticketsCount = count($passengers);
 
-        $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+        $pricePerTicket = 0;
         $paymentReason = self::getPaymentReasonByRegistrationType($registrationType);
 
         $paidTicketsCount = 0;
         $freeTicketsCount = 0;
+        $baseTotalAmount = 0;
+        $penaltyTotalAmount = 0;
         $totalAmount = 0;
 
         $passengerPaymentDetails = [];
 
         foreach ($passengers as $index => $passenger) {
             $paymentStatus = $passenger['payment_status'] ?? 'free';
+            $penaltyAmount = (int) ($passenger['penalty_amount'] ?? 0);
 
             $amount = 0;
+            $baseAmount = 0;
 
             if ($paymentStatus === 'pending' || $paymentStatus === 'paid') {
-                $amount = $pricePerTicket;
+                $amount = self::getPaymentAmount(
+                    $registrationType,
+                    $index,
+                    $paymentStatus,
+                    $penaltyAmount
+                );
+                $baseAmount = max(0, $amount - $penaltyAmount);
                 $paidTicketsCount++;
             } else {
                 $freeTicketsCount++;
             }
 
+            $baseTotalAmount += $baseAmount;
+            $penaltyTotalAmount += $penaltyAmount;
             $totalAmount += $amount;
+            $pricePerTicket = max($pricePerTicket, $amount);
 
             $passengerPaymentDetails[] = [
                 'index' => $index + 1,
                 'first_name' => $passenger['first_name'] ?? '',
                 'last_name' => $passenger['last_name'] ?? '',
+                'email' => $passenger['email'] ?? '',
                 'seat_id' => $passenger['seat_id'] ?? '',
                 'ticket_code' => $passenger['ticket_code'] ?? '',
                 'registration_type' => $passenger['registration_type'] ?? $registrationType,
                 'payment_status' => $paymentStatus,
+                'base_amount' => $baseAmount,
+                'penalty_amount' => $penaltyAmount,
                 'amount' => $amount,
             ];
+        }
+
+        if (array_sum(array_column($passengerPaymentDetails, 'penalty_amount')) > 0) {
+            $paymentReason = trim(
+                $paymentReason . ' + penalización de $500 por dos inasistencias previas',
+                ' +'
+            );
         }
 
         return [
@@ -874,6 +909,8 @@ class ReservationController
             'paid_tickets_count' => $paidTicketsCount,
             'free_tickets_count' => $freeTicketsCount,
             'price_per_ticket' => $pricePerTicket,
+            'base_total_amount' => $baseTotalAmount,
+            'penalty_total_amount' => $penaltyTotalAmount,
             'total_amount' => $totalAmount,
             'payment_reason' => $paymentReason,
             'passengers' => $passengerPaymentDetails,
@@ -891,6 +928,27 @@ class ReservationController
         };
     }
 
+    private static function getPaymentAmount(
+        string $registrationType,
+        int $passengerIndex,
+        string $paymentStatus,
+        int $penaltyAmount = 0
+    ): int {
+        if ($paymentStatus !== 'pending' && $paymentStatus !== 'paid') {
+            return 0;
+        }
+
+        $baseAmount = match ($registrationType) {
+            'prospect' => 1500,
+            'family_friend' => 500,
+            'investor' => $passengerIndex === 0 ? 0 : 500,
+            'internal' => 500,
+            default => 0,
+        };
+
+        return $baseAmount + max(0, $penaltyAmount);
+    }
+
     private static function getPaymentReasonByRegistrationType(string $registrationType): string
     {
         return match ($registrationType) {
@@ -900,6 +958,55 @@ class ReservationController
             'internal' => 'Segunda visita de personal interno',
             default => '',
         };
+    }
+
+    private static function getNoShowPenaltyNotice(array $passengers): string
+    {
+        $penalizedPassengers = [];
+
+        foreach ($passengers as $passenger) {
+            $email = trim($passenger['email'] ?? '');
+
+            if (!TicketPassenger::passengerRequiresNoShowPenalty($email)) {
+                continue;
+            }
+
+            $name = trim(
+                ($passenger['first_name'] ?? '') . ' ' . ($passenger['last_name'] ?? '')
+            );
+
+            $penalizedPassengers[] = $name ?: $email;
+        }
+
+        if (!$penalizedPassengers) {
+            return '';
+        }
+
+        return 'Se aplica una penalización de $500 MXN por boleto debido a dos '
+            . 'inasistencias previas registradas para: '
+            . implode(', ', $penalizedPassengers)
+            . '. Este importe es adicional al costo normal del boleto. Por este motivo se adjunta una ficha de pago, incluso si la modalidad normalmente es gratuita.';
+    }
+
+    private static function getPassengerIndexInTicket(int $ticketId, int $passengerId): int
+    {
+        $db = TicketPassenger::getDB();
+        $stmt = $db->prepare("
+            SELECT COUNT(*) AS previous_passengers
+            FROM ticket_passengers
+            WHERE ticket_id = ? AND id < ?
+        ");
+
+        if (!$stmt) {
+            throw new \Exception('No se pudo determinar la posición del pasajero.');
+        }
+
+        $stmt->bind_param('ii', $ticketId, $passengerId);
+        $stmt->execute();
+
+        $result = $stmt->get_result()->fetch_assoc();
+
+        return (int) ($result['previous_passengers'] ?? 0);
     }
 
     private static function saveReservationRegistration(
@@ -1737,6 +1844,19 @@ class ReservationController
             'registration' => $registrationPayload,
         ]);
 
+        $paymentNotice = '';
+
+        if (
+            ($passenger->payment_status ?? 'free') === 'pending'
+            && ($passenger->penalty_amount ?? 0) > 0
+        ) {
+            $paymentNotice = self::getNoShowPenaltyNotice([[
+                'first_name' => $passenger->first_name ?? '',
+                'last_name' => $passenger->last_name ?? '',
+                'email' => $passenger->email,
+            ]]);
+        }
+
         $email = new Email(
             $passenger->email,
             $passengerName,
@@ -1744,7 +1864,8 @@ class ReservationController
             $trip->trip_date,
             $seatId,
             (string) $passenger->trip_id,
-            $context
+            $context,
+            $paymentNotice
         );
 
         if ($ticketsPdfPath && file_exists($ticketsPdfPath)) {
@@ -1752,7 +1873,25 @@ class ReservationController
         }
 
         if (($passenger->payment_status ?? 'free') === 'pending') {
-            $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+            $passengerIndex = self::getPassengerIndexInTicket(
+                (int) $passenger->ticket_id,
+                (int) $passenger->id
+            );
+            $penaltyAmount = (int) ($passenger->penalty_amount ?? 0);
+            $pricePerTicket = self::getPaymentAmount(
+                $registrationType,
+                $passengerIndex,
+                'pending',
+                $penaltyAmount
+            );
+            $paymentReason = self::getPaymentReasonByRegistrationType($registrationType);
+
+            if ($penaltyAmount > 0) {
+                $paymentReason = trim(
+                    $paymentReason . ' + penalización de $500 por dos inasistencias previas',
+                    ' +'
+                );
+            }
 
             $paymentPdfPath = TicketPdfService::buildPaymentSlipPdf([
                 'client_name' => $passengerName,
@@ -1764,16 +1903,19 @@ class ReservationController
                 'free_tickets_count' => 0,
                 'price_per_ticket' => $pricePerTicket,
                 'total_amount' => $pricePerTicket,
-                'payment_reason' => self::getPaymentReasonByRegistrationType($registrationType),
+                'payment_reason' => $paymentReason,
                 'passengers' => [
                     [
                         'index' => 1,
                         'first_name' => $passenger->first_name ?? '',
                         'last_name' => $passenger->last_name ?? '',
+                        'email' => $passenger->email ?? '',
                         'seat_id' => $seatId,
                         'ticket_code' => $passenger->ticket_code ?? '',
                         'registration_type' => $registrationType,
                         'payment_status' => 'pending',
+                        'base_amount' => max(0, $pricePerTicket - $penaltyAmount),
+                        'penalty_amount' => $penaltyAmount,
                         'amount' => $pricePerTicket,
                     ]
                 ],
@@ -1877,7 +2019,17 @@ class ReservationController
             ];
 
             if (($passenger->payment_status ?? 'free') === 'pending') {
-                $pricePerTicket = self::getPricePerTicketByRegistrationType($registrationType);
+                $passengerIndex = self::getPassengerIndexInTicket(
+                    (int) $passenger->ticket_id,
+                    (int) $passenger->id
+                );
+                $penaltyAmount = (int) ($passenger->penalty_amount ?? 0);
+                $pricePerTicket = self::getPaymentAmount(
+                    $registrationType,
+                    $passengerIndex,
+                    'pending',
+                    $penaltyAmount
+                );
 
                 $documentsPayload['payment_slip'] = [
                     'client_name' => $passengerName,
@@ -1892,9 +2044,12 @@ class ReservationController
                             'index' => 1,
                             'first_name' => $passenger->first_name ?? '',
                             'last_name' => $passenger->last_name ?? '',
+                            'email' => $passenger->email ?? '',
                             'seat_id' => $seatId,
                             'registration_type' => $registrationType,
                             'payment_status' => 'pending',
+                            'base_amount' => max(0, $pricePerTicket - $penaltyAmount),
+                            'penalty_amount' => $penaltyAmount,
                             'amount' => $pricePerTicket,
                         ]
                     ],
@@ -2014,12 +2169,17 @@ class ReservationController
 
             $ticketsPdfPath = TicketPdfService::buildTicketsPdf($payloadPdf);
 
+            $paymentNotice = self::getNoShowPenaltyNotice($payload['passengers']);
+
             $email = new Email(
                 $emailTo,
                 $ticketsName,
                 'Tus Boletos RH',
                 $tripDate,
-                implode(', ', $seatNumbers)
+                implode(', ', $seatNumbers),
+                '',
+                'reservation',
+                $paymentNotice
             );
 
             if ($ticketsPdfPath && file_exists($ticketsPdfPath)) {
@@ -2038,6 +2198,8 @@ class ReservationController
                     'paid_tickets_count' => $payment['paid_tickets_count'],
                     'free_tickets_count' => $payment['free_tickets_count'],
                     'price_per_ticket' => $payment['price_per_ticket'],
+                    'base_total_amount' => $payment['base_total_amount'],
+                    'penalty_total_amount' => $payment['penalty_total_amount'],
                     'total_amount' => $payment['total_amount'],
                     'payment_reason' => $payment['payment_reason'],
                     'passengers' => $payment['passengers'],

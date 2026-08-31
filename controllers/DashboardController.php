@@ -55,29 +55,22 @@ class DashboardController
 
         return "
             CASE
-                WHEN rr.registration_type = 'prospect' THEN {$prospectPrice}
-
-                WHEN rr.registration_type = 'family_friend' THEN {$recoveryPrice}
-
-                WHEN rr.registration_type = 'investor'
-                    AND tp.id <> (
-                        SELECT MIN(tp_inv.id)
-                        FROM ticket_passengers tp_inv
-                        WHERE tp_inv.ticket_id = tp.ticket_id
-                    )
-                THEN {$recoveryPrice}
-
-                WHEN rr.registration_type = 'internal'
-                    AND EXISTS (
-                        SELECT 1
-                        FROM ticket_passengers tp_prev
-                        WHERE LOWER(TRIM(tp_prev.email)) = LOWER(TRIM(tp.email))
-                        AND tp_prev.id < tp.id
-                        LIMIT 1
-                    )
-                THEN {$recoveryPrice}
-
-                ELSE 0
+                WHEN tp.payment_status NOT IN ('pending', 'paid') THEN 0
+                ELSE
+                    CASE
+                        WHEN rr.registration_type = 'prospect' THEN {$prospectPrice}
+                        WHEN rr.registration_type = 'family_friend' THEN {$recoveryPrice}
+                        WHEN rr.registration_type = 'investor'
+                            AND tp.id <> (
+                                SELECT MIN(tp_inv.id)
+                                FROM ticket_passengers tp_inv
+                                WHERE tp_inv.ticket_id = tp.ticket_id
+                            )
+                        THEN {$recoveryPrice}
+                        WHEN rr.registration_type = 'internal' THEN {$recoveryPrice}
+                        ELSE 0
+                    END
+                    + COALESCE(tp.penalty_amount, 0)
             END
         ";
     }

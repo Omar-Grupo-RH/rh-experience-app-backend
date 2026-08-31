@@ -15,6 +15,7 @@ class TicketPassenger extends ActiveRecord
         'trip_id',
         'ticket_code',
         'payment_status',
+        'penalty_amount',
         'paid_at',
         'paid_by',
         'seat_id',
@@ -36,6 +37,7 @@ class TicketPassenger extends ActiveRecord
     public ?int $trip_id;
     public ?string $ticket_code;
     public string $payment_status;
+    public int $penalty_amount;
     public ?string $paid_at;
     public ?int $paid_by;
     public ?string $seat_id;
@@ -59,6 +61,7 @@ class TicketPassenger extends ActiveRecord
 
         $this->ticket_code = $args['ticket_code'] ?? null;
         $this->payment_status = $args['payment_status'] ?? 'free';
+        $this->penalty_amount = (int) ($args['penalty_amount'] ?? 0);
         $this->paid_at = $args['paid_at'] ?? null;
         $this->paid_by = isset($args['paid_by']) ? (int) $args['paid_by'] : null;
 
@@ -165,11 +168,54 @@ class TicketPassenger extends ActiveRecord
         return (bool) $result->fetch_assoc();
     }
 
+    public static function passengerNoShowCount(string $email): int
+    {
+        $db = self::getDB();
+        $email = trim($email);
+
+        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return 0;
+        }
+
+        $query = "
+            SELECT COUNT(*) AS no_show_count
+            FROM " . static::$tabla . " tp
+            INNER JOIN trips t ON t.id = tp.trip_id
+            WHERE LOWER(TRIM(tp.email)) = LOWER(TRIM(?))
+            AND t.trip_date < CURDATE()
+            AND COALESCE(tp.attendance_status, 'ausencia') <> 'asistio'
+        ";
+
+        $stmt = $db->prepare($query);
+
+        if (!$stmt) {
+            throw new \Exception('Error validando inasistencias del pasajero: ' . $db->error);
+        }
+
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+
+        $result = $stmt->get_result()->fetch_assoc();
+
+        return (int) ($result['no_show_count'] ?? 0);
+    }
+
+    public static function passengerRequiresNoShowPenalty(string $email): bool
+    {
+        return self::passengerNoShowCount($email) >= 2;
+    }
+
     public static function resolvePaymentStatus(
         string $registrationType,
         int $passengerIndex,
         array $passengerData
     ): string {
+        $email = trim($passengerData['email'] ?? '');
+
+        if (self::passengerRequiresNoShowPenalty($email)) {
+            return 'pending';
+        }
+
         if ($registrationType === 'prospect') {
             return 'pending';
         }
@@ -183,8 +229,6 @@ class TicketPassenger extends ActiveRecord
         }
 
         if ($registrationType === 'internal') {
-            $email = trim($passengerData['email'] ?? '');
-
             return self::passengerHasPreviousRegistration($email)
                 ? 'pending'
                 : 'free';

@@ -124,6 +124,7 @@ class TripPassenger extends ActiveRecord
 
             tp.ticket_code,
             tp.payment_status,
+            tp.penalty_amount,
             tp.paid_at,
             tp.paid_by,
 
