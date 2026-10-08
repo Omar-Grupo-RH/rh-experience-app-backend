@@ -508,6 +508,8 @@ class ReservationController
             }
 
             $noShowCount = TicketPassenger::passengerNoShowCount($emailPassenger);
+            $recentInternalNoShow = TicketPassenger::passengerRecentInternalNoShow($emailPassenger);
+            $requiresPenalty = $noShowCount >= 2 || $recentInternalNoShow !== null;
             $passenger = TripPassenger::where('email', $emailPassenger);
 
             if ($passenger) {
@@ -515,7 +517,9 @@ class ReservationController
                     'success' => true,
                     'exists' => true,
                     'no_show_count' => $noShowCount,
-                    'requires_no_show_penalty' => $noShowCount >= 2,
+                    'requires_no_show_penalty' => $requiresPenalty,
+                    'requires_internal_no_show_penalty' => $recentInternalNoShow !== null,
+                    'internal_no_show_until' => $recentInternalNoShow['restriction_ends_at'] ?? null,
                     'message' => 'Este pasajero ya ha sido registrado anteriormente.',
                     'passenger' => [
                         'id' => $passenger->id ?? null,
@@ -533,7 +537,9 @@ class ReservationController
                 'success' => true,
                 'exists' => false,
                 'no_show_count' => $noShowCount,
-                'requires_no_show_penalty' => $noShowCount >= 2,
+                'requires_no_show_penalty' => $requiresPenalty,
+                'requires_internal_no_show_penalty' => $recentInternalNoShow !== null,
+                'internal_no_show_until' => $recentInternalNoShow['restriction_ends_at'] ?? null,
                 'message' => 'Este pasajero aún no ha sido registrado.',
                 'passenger' => null,
             ], 200);
@@ -898,7 +904,8 @@ class ReservationController
 
         if (array_sum(array_column($passengerPaymentDetails, 'penalty_amount')) > 0) {
             $paymentReason = trim(
-                $paymentReason . ' + penalización de $500 por dos inasistencias previas',
+                $paymentReason
+                    . ' + penalización de $500 por No show interno en los últimos seis meses o dos inasistencias previas',
                 ' +'
             );
         }
@@ -963,12 +970,17 @@ class ReservationController
     private static function getNoShowPenaltyNotice(array $passengers): string
     {
         $penalizedPassengers = [];
+        $hasRecentInternalNoShow = false;
 
         foreach ($passengers as $passenger) {
             $email = trim($passenger['email'] ?? '');
 
             if (!TicketPassenger::passengerRequiresNoShowPenalty($email)) {
                 continue;
+            }
+
+            if (TicketPassenger::passengerRecentInternalNoShow($email)) {
+                $hasRecentInternalNoShow = true;
             }
 
             $name = trim(
@@ -982,8 +994,12 @@ class ReservationController
             return '';
         }
 
-        return 'Se aplica una penalización de $500 MXN por boleto debido a dos '
-            . 'inasistencias previas registradas para: '
+        $reason = $hasRecentInternalNoShow
+            ? 'No show interno dentro de los últimos seis meses o dos inasistencias previas'
+            : 'dos inasistencias previas';
+
+        return 'Se aplica una penalización de $500 MXN por boleto debido a '
+            . $reason . ' registradas para: '
             . implode(', ', $penalizedPassengers)
             . '. Este importe es adicional al costo normal del boleto. Por este motivo se adjunta una ficha de pago, incluso si la modalidad normalmente es gratuita.';
     }
@@ -1888,7 +1904,8 @@ class ReservationController
 
             if ($penaltyAmount > 0) {
                 $paymentReason = trim(
-                    $paymentReason . ' + penalización de $500 por dos inasistencias previas',
+                    $paymentReason
+                        . ' + penalización de $500 por No show interno en los últimos seis meses o dos inasistencias previas',
                     ' +'
                 );
             }

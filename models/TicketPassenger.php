@@ -200,9 +200,52 @@ class TicketPassenger extends ActiveRecord
         return (int) ($result['no_show_count'] ?? 0);
     }
 
+    public static function passengerRecentInternalNoShow(string $email): ?array
+    {
+        $db = self::getDB();
+        $email = trim($email);
+
+        if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $query = "
+            SELECT
+                MAX(t.trip_date) AS no_show_date,
+                DATE_ADD(MAX(t.trip_date), INTERVAL 6 MONTH) AS restriction_ends_at
+            FROM " . static::$tabla . " tp
+            INNER JOIN trips t ON t.id = tp.trip_id
+            WHERE LOWER(TRIM(tp.email)) = LOWER(TRIM(?))
+            AND tp.attendance_status = 'no_show_interno'
+            AND t.trip_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+            AND t.trip_date <= CURDATE()
+        ";
+
+        $stmt = $db->prepare($query);
+
+        if (!$stmt) {
+            throw new \Exception('Error validando No show interno: ' . $db->error);
+        }
+
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+
+        $result = $stmt->get_result()->fetch_assoc();
+
+        if (empty($result['no_show_date'])) {
+            return null;
+        }
+
+        return [
+            'date' => $result['no_show_date'],
+            'restriction_ends_at' => $result['restriction_ends_at'],
+        ];
+    }
+
     public static function passengerRequiresNoShowPenalty(string $email): bool
     {
-        return self::passengerNoShowCount($email) >= 2;
+        return self::passengerNoShowCount($email) >= 2
+            || self::passengerRecentInternalNoShow($email) !== null;
     }
 
     public static function resolvePaymentStatus(
