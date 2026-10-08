@@ -50,7 +50,7 @@ class SurveyResponse extends ActiveRecord
             FROM " . static::$tabla . "
             WHERE trip_id = ?
             AND ticket_id = ?
-            AND email = ?
+            AND LOWER(TRIM(email)) = LOWER(TRIM(?))
             LIMIT 1
         ";
 

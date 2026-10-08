@@ -21,9 +21,14 @@ class SurveyController
             return;
         }
 
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
         try {
             $dateToCheck = $_GET['date'] ?? null;
-            
+            $timeZone = new \DateTimeZone('America/Merida');
+            $now = new \DateTimeImmutable('now', $timeZone);
 
             if ($dateToCheck && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateToCheck)) {
                 JsonResponse::send([
@@ -34,27 +39,44 @@ class SurveyController
             }
 
             if (!$dateToCheck) {
-                $dateToCheck = (new \DateTime('yesterday', new \DateTimeZone('America/Merida')))
-                    ->format('Y-m-d');
+                $dateToCheck = $now->format('Y-m-d');
+
+                if ((int) $now->format('G') < 17) {
+                    JsonResponse::send([
+                        'success' => true,
+                        'message' => 'Las encuestas del día se envían a partir de las 17:00.',
+                        'trips_processed' => 0,
+                        'sent' => 0,
+                        'skipped' => 0,
+                        'date_checked' => $dateToCheck,
+                    ], 200);
+                    return;
+                }
             }
 
             $trips = self::getTripsFromDate($dateToCheck);
 
             $sentCount = 0;
             $skippedCount = 0;
+            $alreadySentCount = 0;
+            $invalidEmailCount = 0;
+            $failedCount = 0;
 
             foreach ($trips as $trip) {
                 $passengers = self::getPassengersByTrip((int) $trip['id']);
+                $hasDeliveryFailures = false;
 
                 foreach ($passengers as $passenger) {
                     $email = trim($passenger['email'] ?? '');
 
                     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $invalidEmailCount++;
                         $skippedCount++;
                         continue;
                     }
 
                     if (self::surveyAlreadySent((int) $trip['id'], $email)) {
+                        $alreadySentCount++;
                         $skippedCount++;
                         continue;
                     }
@@ -84,11 +106,18 @@ class SurveyController
 
                         $sentCount++;
                     } else {
+                        $hasDeliveryFailures = true;
+                        $failedCount++;
                         $skippedCount++;
+                        error_log(
+                            'Falló encuesta para trip ' . $trip['id'] . ' y correo ' . $email
+                        );
                     }
                 }
 
-                self::markTripSurveyAsSent((int) $trip['id']);
+                if (!$hasDeliveryFailures) {
+                    self::markTripSurveyAsSent((int) $trip['id']);
+                }
             }
 
             JsonResponse::send([
@@ -97,6 +126,9 @@ class SurveyController
                 'trips_processed' => count($trips),
                 'sent' => $sentCount,
                 'skipped' => $skippedCount,
+                'already_sent' => $alreadySentCount,
+                'invalid_emails' => $invalidEmailCount,
+                'failed' => $failedCount,
                 'date_checked' => $dateToCheck,
             ], 200);
             return;
@@ -106,6 +138,82 @@ class SurveyController
             JsonResponse::send([
                 'success' => false,
                 'message' => 'Ocurrió un error al enviar encuestas.',
+            ], 500);
+            return;
+        }
+    }
+
+    public static function resendSurveyEmail()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Método no permitido.',
+            ], 405);
+            return;
+        }
+
+        try {
+            $payload = self::readBody();
+            $passengerId = (int) ($payload['passenger_id'] ?? 0);
+
+            if (!$passengerId) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero es obligatorio.',
+                ], 422);
+                return;
+            }
+
+            $passenger = self::getPassengerSurveyInfo($passengerId);
+
+            if (!$passenger) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Pasajero no encontrado.',
+                ], 404);
+                return;
+            }
+
+            $email = trim($passenger['email'] ?? '');
+
+            if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero no tiene un correo electrónico válido.',
+                ], 422);
+                return;
+            }
+
+            $fullName = trim(
+                ($passenger['first_name'] ?? '') . ' ' . ($passenger['last_name'] ?? '')
+            );
+
+            $surveyEmail = new SurveyEmail(
+                $email,
+                $fullName ?: 'Cliente',
+                $passenger['title'] ?? 'RH Experience',
+                $passenger['trip_date'] ?? '',
+                self::buildSurveyUrl($passenger, $passenger)
+            );
+
+            if (!$surveyEmail->send()) {
+                throw new \Exception('No se pudo enviar el correo de encuesta.');
+            }
+
+            self::registerSurveyEmail((int) $passenger['trip_id'], $email, $fullName);
+
+            JsonResponse::send([
+                'success' => true,
+                'message' => 'Encuesta reenviada correctamente a ' . $email,
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error reenviando encuesta: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al reenviar la encuesta.',
             ], 500);
             return;
         }
@@ -142,7 +250,7 @@ class SurveyController
                     ON t.id = tp.trip_id
                 WHERE tp.trip_id = ?
                 AND tp.ticket_id = ?
-                AND tp.email = ?
+                AND LOWER(TRIM(tp.email)) = LOWER(TRIM(?))
                 LIMIT 1
             ";
 
@@ -423,6 +531,29 @@ class SurveyController
         }
     }
 
+    public static function adminDeliveries()
+    {
+        try {
+            $tripId = isset($_GET['trip_id']) && $_GET['trip_id'] !== ''
+                ? (int) $_GET['trip_id']
+                : null;
+
+            JsonResponse::send([
+                'success' => true,
+                'data' => self::getSurveyDeliveries($tripId),
+            ], 200);
+            return;
+        } catch (\Throwable $e) {
+            error_log('Error listando envíos de encuesta: ' . $e->getMessage());
+
+            JsonResponse::send([
+                'success' => false,
+                'message' => 'Ocurrió un error al obtener los envíos de encuesta.',
+            ], 500);
+            return;
+        }
+    }
+
     private static function validateSurveyAnswers(array $answers): void
     {
         $required = [
@@ -509,7 +640,7 @@ class SurveyController
                 ON t.id = tp.trip_id
             WHERE tp.trip_id = ?
             AND tp.ticket_id = ?
-            AND tp.email = ?
+            AND LOWER(TRIM(tp.email)) = LOWER(TRIM(?))
             LIMIT 1
         ";
 
@@ -525,6 +656,97 @@ class SurveyController
         $result = $stmt->get_result();
 
         return $result->fetch_assoc() ?: null;
+    }
+
+    private static function getPassengerSurveyInfo(int $passengerId): ?array
+    {
+        $db = ActiveRecord::getDB();
+
+        $query = "
+            SELECT
+                tp.first_name,
+                tp.last_name,
+                tp.email,
+                tp.ticket_id,
+                tp.trip_id,
+                t.id AS id,
+                t.title,
+                t.trip_date
+            FROM ticket_passengers tp
+            INNER JOIN trips t ON t.id = tp.trip_id
+            WHERE tp.id = ?
+            LIMIT 1
+        ";
+
+        $stmt = $db->prepare($query);
+
+        if (!$stmt) {
+            throw new \Exception('Error preparando información de encuesta: ' . $db->error);
+        }
+
+        $stmt->bind_param('i', $passengerId);
+        $stmt->execute();
+
+        return $stmt->get_result()->fetch_assoc() ?: null;
+    }
+
+    private static function getSurveyDeliveries(?int $tripId = null): array
+    {
+        $db = ActiveRecord::getDB();
+        $where = $tripId ? 'WHERE t.id = ?' : '';
+        $query = "
+            SELECT
+                tp.id AS passenger_id,
+                tp.trip_id,
+                tp.ticket_id,
+                tp.first_name,
+                tp.last_name,
+                tp.email,
+                t.title AS trip_title,
+                t.trip_date,
+                se.sent_at,
+                sr.created_at AS answered_at
+            FROM ticket_passengers tp
+            INNER JOIN trips t ON t.id = tp.trip_id
+            LEFT JOIN survey_emails se
+                ON se.trip_id = tp.trip_id
+                AND LOWER(TRIM(se.passenger_email)) = LOWER(TRIM(tp.email))
+            LEFT JOIN survey_responses sr
+                ON sr.trip_id = tp.trip_id
+                AND sr.ticket_id = tp.ticket_id
+                AND LOWER(TRIM(sr.email)) = LOWER(TRIM(tp.email))
+            {$where}
+            ORDER BY t.trip_date DESC, tp.first_name ASC, tp.last_name ASC
+        ";
+
+        if ($tripId) {
+            $stmt = $db->prepare($query);
+
+            if (!$stmt) {
+                throw new \Exception('Error preparando historial de envíos: ' . $db->error);
+            }
+
+            $stmt->bind_param('i', $tripId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+        } else {
+            $result = $db->query($query);
+
+            if (!$result) {
+                throw new \Exception('Error consultando historial de envíos: ' . $db->error);
+            }
+        }
+
+        $deliveries = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $row['passenger_name'] = trim($row['first_name'] . ' ' . $row['last_name']);
+            $row['sent'] = !empty($row['sent_at']);
+            $row['answered'] = !empty($row['answered_at']);
+            $deliveries[] = $row;
+        }
+
+        return $deliveries;
     }
 
     private static function isValidSecret(string $secret): bool
@@ -646,7 +868,8 @@ class SurveyController
             VALUES
                 (?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
-                passenger_email = passenger_email
+                passenger_name = VALUES(passenger_name),
+                sent_at = NOW()
         ";
 
         $stmt = $db->prepare($query);
@@ -682,11 +905,11 @@ class SurveyController
 
     private static function buildSurveyUrl(array $trip, array $passenger): string
     {
-        $baseUrl = $_ENV['SURVEY_URL'] ?? 'http://localhost:3000/app/encuesta';
+        $baseUrl = $_ENV['SURVEY_URL'] ?? 'https://app-rhexperience.gruporh.mx/app/encuesta';
 
         $params = [
             'trip_id' => $trip['id'] ?? '',
-            'email' => $passenger['email'] ?? '',
+            'email' => trim($passenger['email'] ?? ''),
             'ticket_id' => $passenger['ticket_id'] ?? '',
         ];
 

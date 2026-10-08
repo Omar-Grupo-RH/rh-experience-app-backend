@@ -110,6 +110,8 @@ $router->post('/api/survey', [SurveyController::class, 'store']);
 $router->get('/api/admin/survey-responses', [SurveyController::class, 'adminIndex']);
 $router->get('/api/admin/survey-response', [SurveyController::class, 'adminShow']);
 $router->get('/api/admin/survey-stats', [SurveyController::class, 'adminStats']);
+$router->get('/api/admin/survey-deliveries', [SurveyController::class, 'adminDeliveries'], true);
+$router->post('/api/survey/resend', [SurveyController::class, 'resendSurveyEmail'], true);
 
 $router->get('/api/surveys/send-pending', [SurveyController::class, 'sendPendingSurveys']);
 

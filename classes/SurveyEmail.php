@@ -43,10 +43,10 @@ class SurveyEmail
 
       return $mail->send();
     } catch (Exception $e) {
-      error_log('Error enviando encuesta: ' . $mail->ErrorInfo);
+      error_log('Error enviando encuesta a ' . $this->email . ': ' . $mail->ErrorInfo);
       return false;
     } catch (\Throwable $e) {
-      error_log('Error enviando encuesta: ' . $e->getMessage());
+      error_log('Error enviando encuesta a ' . $this->email . ': ' . $e->getMessage());
       return false;
     }
   }
