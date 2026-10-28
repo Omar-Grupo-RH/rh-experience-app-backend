@@ -2,3 +2,8 @@
 /vendor
 .DS_Store
 /composer.lock
+/documents
+/public/tickets
+
+
+/public/.htaccess

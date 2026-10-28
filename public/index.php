@@ -82,11 +82,11 @@ $router->get('/api/travels/passengers', [DashboardController::class, 'getPasseng
 $router->get('/api/admin/dashboard', [DashboardController::class, 'index']);
 
 // Documentación individual de pasajeros
-$router->post(
-    '/api/passenger/identity/upload',
-    [IdentityController::class, 'uploadForPassenger'],
-    true
-);
+// $router->post(
+//     '/api/passenger/identity/upload',
+//     [IdentityController::class, 'uploadForPassenger'],
+//     true
+// );
 
 // Administración: consulta segura de INE
 $router->get(
@@ -106,6 +106,12 @@ $router->get(
 $router->post(
     '/api/admin/identity/verify',
     [AdminIdentityController::class, 'verify'],
+    true
+);
+
+$router->post(
+    '/api/admin/identity/replace',
+    [AdminIdentityController::class, 'replace'],
     true
 );
 
