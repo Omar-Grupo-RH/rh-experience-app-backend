@@ -53,6 +53,7 @@ use Controllers\ReservationController;
 use Controllers\SurveyController;
 use Controllers\TripController;
 use Controllers\IdentityController;
+use Controllers\AdminIdentityController;
 use MVC\Router;
 
 $router = new Router();
@@ -84,6 +85,27 @@ $router->get('/api/admin/dashboard', [DashboardController::class, 'index']);
 $router->post(
     '/api/passenger/identity/upload',
     [IdentityController::class, 'uploadForPassenger'],
+    true
+);
+
+// Administración: consulta segura de INE
+$router->get(
+    '/api/admin/identity',
+    [AdminIdentityController::class, 'show'],
+    true
+);
+
+// Administración: visualizar frente o reverso
+$router->get(
+    '/api/admin/identity/image',
+    [AdminIdentityController::class, 'image'],
+    true
+);
+
+// Administración: verificar o rechazar
+$router->post(
+    '/api/admin/identity/verify',
+    [AdminIdentityController::class, 'verify'],
     true
 );
 
