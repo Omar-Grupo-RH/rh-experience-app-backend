@@ -800,6 +800,10 @@ class ReservationController
             $totalSeats = 15;
         }
 
+        if (!empty(Trip::invalidSeatsForCapacity($seats, $totalSeats))) {
+            throw new \InvalidArgumentException('Uno o más asientos seleccionados no existen en la unidad de este viaje.');
+        }
+
         $stmt = $db->prepare("
             SELECT COUNT(*) AS reserved_count
             FROM ticket_passengers
@@ -1159,6 +1163,14 @@ class ReservationController
                 JsonResponse::send([
                     'success' => false,
                     'message' => 'El nuevo tour no tiene asientos disponibles.'
+                ], 422);
+                return;
+            }
+
+            if (!empty(Trip::invalidSeatsForCapacity([$newSeatId], (int) $trip['total_seats']))) {
+                JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El asiento seleccionado no existe en la unidad del nuevo tour.'
                 ], 422);
                 return;
             }

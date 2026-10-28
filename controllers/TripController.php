@@ -176,6 +176,23 @@ class TripController
 
             $payload['is_active'] = 1;
 
+            if (!isset($payload['total_seats']) || $payload['total_seats'] === '' || $payload['total_seats'] === null) {
+                $payload['total_seats'] = Trip::DEFAULT_CAPACITY;
+            }
+
+            if (!Trip::isAllowedCapacity($payload['total_seats'])) {
+                $allowed = implode(' o ', Trip::ALLOWED_CAPACITIES);
+
+                JsonResponse::send([
+                    'success' => false,
+                    'errors' => "La capacidad del RH Experience debe ser de {$allowed} pasajeros.",
+                    'message' => "La capacidad del RH Experience debe ser de {$allowed} pasajeros."
+                ], 422);
+                exit;
+            }
+
+            $payload['total_seats'] = (int) $payload['total_seats'];
+
             $trip = new Trip($payload);
 
             if (empty($trip->trip_date)) {
