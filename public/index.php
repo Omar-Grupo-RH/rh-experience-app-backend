@@ -52,6 +52,7 @@ use Controllers\LoginController;
 use Controllers\ReservationController;
 use Controllers\SurveyController;
 use Controllers\TripController;
+use Controllers\IdentityController;
 use MVC\Router;
 
 $router = new Router();
@@ -79,6 +80,12 @@ $router->get('/api/travels', [DashboardController::class, 'getTravels'], false);
 $router->get('/api/travels/passengers', [DashboardController::class, 'getPassengersByTravel'], true);
 $router->get('/api/admin/dashboard', [DashboardController::class, 'index']);
 
+// Documentación individual de pasajeros
+$router->post(
+    '/api/passenger/identity/upload',
+    [IdentityController::class, 'uploadForPassenger'],
+    true
+);
 
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
 
