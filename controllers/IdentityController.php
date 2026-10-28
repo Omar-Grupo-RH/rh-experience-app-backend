@@ -43,10 +43,12 @@ class IdentityController
             return;
         }
 
-        $storage = rtrim(
-            $_ENV['IDENTITY_STORAGE_PATH'] ?? '',
+        $relativePath = trim(
+            $_ENV['IDENTITY_STORAGE_PATH'] ?? 'documents',
             '/'
         );
+
+        $storage = dirname(__DIR__) . '/' . $relativePath;
 
         if (
             $storage === '' ||

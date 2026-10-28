@@ -12,6 +12,7 @@ use Model\Ticket;
 use Model\TicketPassenger;
 use Model\Trip;
 use Model\TripPassenger;
+use Classes\IdentityImageService;
 
 class ReservationController
 {
@@ -28,6 +29,8 @@ class ReservationController
         }
 
         $db = ActiveRecord::getDB();
+        $createdIdentityFiles = [];
+        $reservationCommitted = false;
 
         try {
             $payload = self::readBody();
@@ -44,6 +47,11 @@ class ReservationController
             $seats = self::normalizeSeats($payload['trip_data']['seats']);
             $numPassengers = count($payload['passengers']);
             $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
+            // El INE es obligatorio para todos los pasajeros.
+            self::validateIdentityUploads($numPassengers);
+
+            // Configuración privada de almacenamiento.
+            $identityStorage = self::identityStorageRoot();
 
             if (count($seats) !== $numPassengers) {
                 JsonResponse::send([
@@ -137,6 +145,13 @@ class ReservationController
                 }
 
                 $passengerId = (int) $resP['id'];
+                self::savePassengerIdentity(
+                    $db,
+                    $passengerId,
+                    $index,
+                    $identityStorage,
+                    $createdIdentityFiles
+                );
 
                 $payload['passengers'][$index]['ticket_passenger_id'] = $passengerId;
                 $payload['passengers'][$index]['ticket_id'] = $ticket->id;
@@ -183,14 +198,24 @@ class ReservationController
             );
 
             $db->commit();
+            $reservationCommitted = true;
 
-            self::enviarBoletosConfirmados($ticket, $payload);
+            try {
+                self::enviarBoletosConfirmados($ticket, $payload);
+            } catch (\Throwable $emailError) {
+                error_log(
+                    'Reservación confirmada; error enviando boletos: ' .
+                        $emailError->getMessage()
+                );
+            }
 
             JsonResponse::send($response, 201);
             return;
         } catch (\mysqli_sql_exception $e) {
             self::safeRollback($db);
-
+            if (!$reservationCommitted) {
+                self::cleanupIdentityFiles($createdIdentityFiles);
+            }
             error_log('MySQL error en reserva: ' . $e->getMessage());
 
             if ((int) $e->getCode() === 1062) {
@@ -208,6 +233,9 @@ class ReservationController
             return;
         } catch (\InvalidArgumentException $e) {
             self::safeRollback($db);
+            if (!$reservationCommitted) {
+                self::cleanupIdentityFiles($createdIdentityFiles);
+            }
 
             JsonResponse::send([
                 'success' => false,
@@ -216,6 +244,9 @@ class ReservationController
             return;
         } catch (\Throwable $e) {
             self::safeRollback($db);
+            if (!$reservationCommitted) {
+                self::cleanupIdentityFiles($createdIdentityFiles);
+            }
 
             error_log('Error en reserva: ' . $e->getMessage());
 
@@ -557,23 +588,45 @@ class ReservationController
         }
     }
 
+
     private static function readBody(): array
     {
-        $payload = $_POST;
+        $contentType = strtolower(
+            $_SERVER['CONTENT_TYPE'] ?? ''
+        );
 
-        if (empty($payload)) {
-            $raw = file_get_contents('php://input');
-            $decoded = json_decode($raw, true);
+        if (str_contains($contentType, 'multipart/form-data')) {
+            $raw = $_POST['payload'] ?? null;
 
-            if (!is_array($decoded)) {
-                throw new \InvalidArgumentException('El cuerpo de la solicitud no es un JSON válido.');
+            if (!is_string($raw) || $raw === '') {
+                throw new \InvalidArgumentException(
+                    'Faltan los datos de la reservación.'
+                );
             }
 
-            $payload = $decoded;
+            $payload = json_decode($raw, true);
+
+            if (!is_array($payload)) {
+                throw new \InvalidArgumentException(
+                    'Los datos de la reservación no son válidos.'
+                );
+            }
+
+            return $payload;
+        }
+
+        $raw = file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+
+        if (!is_array($payload)) {
+            throw new \InvalidArgumentException(
+                'El cuerpo de la solicitud no es un JSON válido.'
+            );
         }
 
         return $payload;
     }
+
 
     private static function validatePayload(array $payload): void
     {
@@ -2243,6 +2296,171 @@ class ReservationController
             $email->send();
         } catch (\Throwable $e) {
             error_log('Error enviando email post-reserva: ' . $e->getMessage());
+        }
+    }
+
+
+    private static function identityStorageRoot(): string
+    {
+        $configured = trim(
+            $_ENV['IDENTITY_STORAGE_PATH'] ?? 'documents'
+        );
+
+        // Para este proyecto la ruta debe ser relativa
+        // a la raíz del backend.
+        if (
+            $configured === '' ||
+            str_starts_with($configured, '/') ||
+            str_contains($configured, '..') ||
+            str_contains($configured, '\\')
+        ) {
+            throw new \RuntimeException(
+                'Ruta de documentos no válida.'
+            );
+        }
+
+        $backendRoot = realpath(dirname(__DIR__));
+        $storage = realpath(
+            $backendRoot . '/' . trim($configured, '/')
+        );
+        $public = realpath($backendRoot . '/public');
+
+        if (
+            !$storage ||
+            !$public ||
+            !is_dir($storage) ||
+            !is_writable($storage)
+        ) {
+            throw new \RuntimeException(
+                'El almacenamiento de documentos no está disponible.'
+            );
+        }
+
+        // Impedir que se guarden INE dentro de public.
+        if (
+            $storage === $public ||
+            str_starts_with($storage, $public . DIRECTORY_SEPARATOR)
+        ) {
+            throw new \RuntimeException(
+                'El almacenamiento debe estar fuera de public.'
+            );
+        }
+
+        return $storage;
+    }
+
+    private static function validateIdentityUploads(
+        int $passengerCount
+    ): void {
+        $required = [];
+
+        for ($index = 0; $index < $passengerCount; $index++) {
+            $required[] = "ine_front_{$index}";
+            $required[] = "ine_back_{$index}";
+        }
+
+        foreach ($required as $field) {
+            $file = $_FILES[$field] ?? null;
+
+            if (
+                !is_array($file) ||
+                ($file['error'] ?? UPLOAD_ERR_NO_FILE)
+                !== UPLOAD_ERR_OK ||
+                !isset($file['tmp_name']) ||
+                !is_uploaded_file($file['tmp_name'])
+            ) {
+                throw new \InvalidArgumentException(
+                    "Falta una identificación válida: {$field}."
+                );
+            }
+
+            $size = (int) ($file['size'] ?? 0);
+
+            if ($size <= 0 || $size > 8 * 1024 * 1024) {
+                throw new \InvalidArgumentException(
+                    "El archivo {$field} supera el límite permitido o está vacío."
+                );
+            }
+        }
+
+        // No confiar en el número de pasajeros enviado
+        // si aparecen archivos extra inesperados.
+        foreach (array_keys($_FILES) as $field) {
+            if (!in_array($field, $required, true)) {
+                throw new \InvalidArgumentException(
+                    'La solicitud contiene archivos inesperados.'
+                );
+            }
+        }
+    }
+
+    private static function savePassengerIdentity(
+        \mysqli $db,
+        int $passengerId,
+        int $index,
+        string $storage,
+        array &$createdFiles
+    ): void {
+        $front = IdentityImageService::save(
+            $_FILES["ine_front_{$index}"],
+            $storage
+        );
+
+        $createdFiles[] = $storage . '/' . $front['path'];
+
+        $back = IdentityImageService::save(
+            $_FILES["ine_back_{$index}"],
+            $storage
+        );
+
+        $createdFiles[] = $storage . '/' . $back['path'];
+
+        $stmt = $db->prepare(
+            "INSERT INTO passenger_documents (
+            ticket_passenger_id,
+            document_type,
+            front_path,
+            back_path,
+            front_sha256,
+            back_sha256,
+            verification_status
+        ) VALUES (
+            ?, 'ine', ?, ?, ?, ?, 'pending'
+        )"
+        );
+
+        if (!$stmt) {
+            throw new \RuntimeException(
+                'No se pudo preparar el registro del INE.'
+            );
+        }
+
+        $stmt->bind_param(
+            'issss',
+            $passengerId,
+            $front['path'],
+            $back['path'],
+            $front['sha256'],
+            $back['sha256']
+        );
+
+        if (!$stmt->execute()) {
+            throw new \RuntimeException(
+                'No se pudo vincular el INE al pasajero.'
+            );
+        }
+
+        $stmt->close();
+    }
+
+
+    private static function cleanupIdentityFiles(
+        array $createdFiles
+    ): void {
+        foreach ($createdFiles as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
         }
     }
 }
