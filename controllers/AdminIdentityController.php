@@ -986,4 +986,103 @@ HTML;
             ], 500);
         }
     }
+
+
+    public static function waiverPdf(): void
+    {
+        self::adminId();
+        $passengerId = self::passengerId();
+
+        try {
+            $db = \Model\ActiveRecord::getDB();
+
+            $stmt = $db->prepare(
+                "SELECT
+                signed_pdf_path,
+                signed_pdf_sha256
+             FROM passenger_waivers
+             WHERE ticket_passenger_id = ?
+               AND status = 'signed'
+             ORDER BY id DESC
+             LIMIT 1"
+            );
+
+            $stmt->bind_param('i', $passengerId);
+            $stmt->execute();
+
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$row) {
+                \App\Http\JsonResponse::send([
+                    'success' => false,
+                    'message' => 'El pasajero no tiene responsiva firmada.'
+                ], 404);
+                return;
+            }
+
+            $relative = $row['signed_pdf_path'];
+
+            if (!preg_match(
+                '~^waivers/[0-9]{4}/[0-9]{2}/[a-f0-9]{48}\.pdf$~',
+                $relative
+            )) {
+                throw new \RuntimeException(
+                    'Ruta de responsiva no válida.'
+                );
+            }
+
+            $storage = self::storageRoot();
+            $folder = realpath($storage . '/waivers');
+            $file = realpath($storage . '/' . $relative);
+
+            if (
+                !$folder ||
+                !$file ||
+                !str_starts_with(
+                    $file,
+                    $folder . DIRECTORY_SEPARATOR
+                ) ||
+                !is_file($file)
+            ) {
+                \App\Http\JsonResponse::send([
+                    'success' => false,
+                    'message' => 'Archivo no encontrado.'
+                ], 404);
+                return;
+            }
+
+            $hash = hash_file('sha256', $file);
+
+            if (!hash_equals(
+                strtolower($row['signed_pdf_sha256']),
+                strtolower($hash)
+            )) {
+                throw new \RuntimeException(
+                    'La integridad del PDF no coincide.'
+                );
+            }
+
+            header('Content-Type: application/pdf');
+            header(
+                'Content-Disposition: attachment; filename="responsiva.pdf"'
+            );
+            header('Content-Length: ' . filesize($file));
+            header('Cache-Control: private, no-store');
+            header('Pragma: no-cache');
+            header('X-Content-Type-Options: nosniff');
+
+            readfile($file);
+            exit;
+        } catch (\Throwable $e) {
+            error_log(
+                'Error consultando responsiva: ' . $e->getMessage()
+            );
+
+            \App\Http\JsonResponse::send([
+                'success' => false,
+                'message' => 'No se pudo consultar la responsiva.'
+            ], 500);
+        }
+    }
 }

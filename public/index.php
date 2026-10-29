@@ -115,6 +115,12 @@ $router->post(
     true
 );
 
+$router->get(
+    '/api/admin/identity/waiver',
+    [AdminIdentityController::class, 'waiverPdf'],
+    true
+);
+
 $router->post('/api/comments/update', [CommentsController::class, 'update'], true);
 
 

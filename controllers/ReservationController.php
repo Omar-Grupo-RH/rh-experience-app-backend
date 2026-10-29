@@ -7,6 +7,7 @@ use Classes\Email;
 use Classes\TicketPdfService;
 use Model\ActiveRecord;
 use Model\Order;
+use Classes\PassengerWaiverService;
 use Model\ReservationRegistration;
 use Model\Ticket;
 use Model\TicketPassenger;
@@ -46,6 +47,18 @@ class ReservationController
             $tripId = (int) $payload['trip_data']['trip_id'];
             $seats = self::normalizeSeats($payload['trip_data']['seats']);
             $numPassengers = count($payload['passengers']);
+
+            // Responsiva obligatoria para cada pasajero.
+            foreach ($payload['passengers'] as $index => $passengerData) {
+                $seatId = (string) ($seats[$index] ?? '');
+
+                PassengerWaiverService::validate(
+                    $passengerData,
+                    (string) $tripId,
+                    $seatId
+                );
+            }
+
             $registrationType = $payload['RegistrationType']['registration_type'] ?? '';
             // El INE es obligatorio para todos los pasajeros.
             self::validateIdentityUploads($numPassengers);
@@ -149,6 +162,13 @@ class ReservationController
                     $db,
                     $passengerId,
                     $index,
+                    $identityStorage,
+                    $createdIdentityFiles
+                );
+                PassengerWaiverService::save(
+                    $db,
+                    $passengerId,
+                    $p,
                     $identityStorage,
                     $createdIdentityFiles
                 );
