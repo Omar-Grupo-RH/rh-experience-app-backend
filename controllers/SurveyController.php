@@ -343,6 +343,7 @@ class SurveyController
                 return;
             }
 
+            unset($answers['staff_andrea_rating']);
             self::validateSurveyAnswers($answers);
 
             $surveyInfo = self::getSurveyInfo($tripId, $ticketId, $email);
@@ -602,7 +603,6 @@ class SurveyController
         $scale5Fields = [
             'beach_recreation_rating',
             'staff_before_info_rating',
-            'staff_andrea_rating',
             'staff_jaqueline_rating',
             'staff_during_info_rating',
             'staff_driver_rating',

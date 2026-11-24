@@ -382,6 +382,7 @@ class SurveyResponse extends ActiveRecord
     private static function hydrateSurveyRow(array $row): array
     {
         $answers = json_decode($row['answers_json'] ?? '{}', true) ?: [];
+        unset($answers['staff_andrea_rating']);
 
         $registrationType = $row['registration_type'] ?? null;
         $registrationTypeLabel = self::formatRegistrationType($registrationType);

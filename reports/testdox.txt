@@ -1,0 +1,63 @@
+Client (Tests\Unit\Models\Client)
+ [x] Constructor normalizes values
+ [x] Admin defaults to zero
+ [x] Hashear password produces verifiable bcrypt hash
+ [x] Hashear password does nothing with empty password
+
+Code (Tests\Unit\Models\Code)
+ [x] Constructor normalizes values
+ [x] Valid code passes validation
+ [x] Every allowed type is accepted
+ [x] Invalid type is rejected
+ [x] Missing name and code are rejected
+ [x] Name longer than 120 chars is rejected
+ [x] Code longer than 80 chars is rejected
+ [x] Code with invalid characters is rejected
+
+Funciones (Tests\Unit\Includes\Funciones)
+ [x] S escapes html
+ [x] S escapes quotes
+ [x] S keeps plain text intact
+ [x] Clean string trims collapses and lowercases
+ [x] Clean string handles null
+ [x] Clean string normalizes tabs and newlines
+ [x] Formatear fecha returns spanish long date
+ [x] Pagina actual matches path info
+ [x] Pagina actual without path info returns false
+
+Jwt Service (Tests\Unit\Core\JwtService)
+ [x] Issue and decode round trip
+ [x] Each token has unique jti
+ [x] Expired token is rejected
+ [x] Tampered token is rejected
+ [x] Garbage token is rejected
+
+Ticket Passenger (Tests\Unit\Models\TicketPassenger)
+ [x] Constructor applies business defaults
+ [x] Constructor normalizes seat and trims fields
+ [x] Constructor encodes array allergies as json
+ [x] Full name concatenates and trims
+ [x] Generate ticket code matches expected format
+ [x] Generate ticket code is random
+ [x] Prospect and family friend always pending
+ [x] Investor first passenger free rest pending
+ [x] Internal first time is free
+ [x] Internal with previous registration is pending
+ [x] Other types default to free
+ [x] Two no shows force pending regardless of type
+ [x] Single no show does not force pending
+ [x] Recent internal no show forces pending
+ [x] Invalid email never triggers penalty queries
+
+Trip (Tests\Unit\Models\Trip)
+ [x] Constructor applies defaults
+ [x] Constructor accepts explicit values
+ [x] Is allowed capacity accepts only configured capacities
+ [x] Seat ids for capacity eight
+ [x] Seat ids for capacity fifteen
+ [x] Seat ids for unknown capacity returns null
+ [x] Invalid seats for capacity detects seats outside layout
+ [x] Invalid seats for capacity normalizes case and spaces
+ [x] Staff row is invalid for passengers
+ [x] Invalid seats for unknown capacity does not restrict
+
